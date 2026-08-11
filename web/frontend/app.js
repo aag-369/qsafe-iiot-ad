@@ -9,7 +9,15 @@ const API = ""; // same-origin (FastAPI serves this file too)
 // Background "quantum network" particle animation
 // ---------------------------------------------------------------------------
 (function particleBackground() {
+  const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const canvas = document.getElementById("bg-canvas");
+  if (reduceMotion) {
+    // The user has opted out of non-essential motion — hide the canvas
+    // entirely rather than drawing a single static frame that would still
+    // cost a layout/paint for no benefit.
+    canvas.style.display = "none";
+    return;
+  }
   const ctx = canvas.getContext("2d");
   let w, h, particles;
 
@@ -94,21 +102,45 @@ function pct(n, d = 1) {
 async function loadHealth() {
   const dot = document.getElementById("health-dot");
   const label = document.getElementById("health-label");
+  const banner = document.getElementById("connectivity-banner");
   try {
     const h = await apiGet("/api/health");
     dot.className = "status-dot " + (h.liboqs_available ? "status-ok" : "status-bad");
     label.textContent = h.liboqs_available
       ? `liboqs online · ${h.kem_backend}`
       : `simulated KEM fallback`;
+    banner.hidden = true;
+    return true;
   } catch (e) {
     dot.className = "status-dot status-bad";
     label.textContent = "backend unreachable";
+    // This is the single most common failure mode: the page was opened as
+    // a local file:// path instead of via the running server, so every
+    // relative /api/... fetch fails. Say so explicitly instead of leaving
+    // a silently broken page.
+    banner.hidden = false;
+    return false;
   }
 }
 
 // ---------------------------------------------------------------------------
 // Project info (hero stats, keywords, pipeline)
 // ---------------------------------------------------------------------------
+// One minimal single-color line icon per pipeline stage — no filled shapes,
+// no multi-color, matching the understated "instrument panel" iconography
+// called for in the design brief. Indexed by stage order (Physical Layer,
+// AI Detection, Crypto-Agility, Orchestration).
+const PIPELINE_ICONS = [
+  // Physical layer: atom / orbit
+  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="1.8" fill="currentColor" stroke="none"/><ellipse cx="12" cy="12" rx="9" ry="3.6"/><ellipse cx="12" cy="12" rx="9" ry="3.6" transform="rotate(60 12 12)"/><ellipse cx="12" cy="12" rx="9" ry="3.6" transform="rotate(120 12 12)"/></svg>`,
+  // AI detection: node graph
+  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="5" cy="6" r="2"/><circle cx="5" cy="18" r="2"/><circle cx="19" cy="12" r="2.4"/><path d="M7 6.8 17 11 M7 17.2 17 13"/></svg>`,
+  // Crypto-agility: key / shield
+  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2 4 5v6c0 5 3.4 8.4 8 9 4.6-.6 8-4 8-9V5l-8-3Z"/><path d="M9.5 12a2.5 2.5 0 1 1 2.4 1.7L15 17" stroke-linecap="round"/></svg>`,
+  // Orchestration: flow / pipeline
+  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 6h6M3 12h6M3 18h6"/><path d="M9 6h4a3 3 0 0 1 3 3v0M9 18h4a3 3 0 0 0 3-3v0"/><path d="M16 9h5M16 15h5"/></svg>`,
+];
+
 async function loadProjectInfo() {
   try {
     const info = await apiGet("/api/project-info");
@@ -129,6 +161,7 @@ async function loadProjectInfo() {
       const card = document.createElement("div");
       card.className = "pipeline-card";
       card.innerHTML = `
+        <div class="pipeline-icon">${PIPELINE_ICONS[i] || ""}</div>
         <div class="pipeline-index">STAGE ${String(i + 1).padStart(2, "0")}</div>
         <h4>${stage.stage}</h4>
         <span class="pipeline-module">${stage.module}</span>
@@ -253,6 +286,17 @@ function setupSliders() {
   bind("bench-rounds", "bench-rounds-val");
 }
 
+function showInlineError(id, message) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = message;
+  el.hidden = false;
+}
+function hideInlineError(id) {
+  const el = document.getElementById(id);
+  if (el) el.hidden = true;
+}
+
 async function runLiveSimulation() {
   const btn = document.getElementById("run-live-btn");
   const spinner = btn.querySelector(".btn-spinner");
@@ -260,6 +304,7 @@ async function runLiveSimulation() {
   btn.disabled = true;
   spinner.hidden = false;
   label.textContent = "Simulating…";
+  hideInlineError("demo-error");
 
   try {
     const body = {
@@ -268,11 +313,17 @@ async function runLiveSimulation() {
       inject_attack: document.getElementById("inject-attack").checked,
       attack_intensity: Number(document.getElementById("intensity").value),
     };
+    const t0 = performance.now();
     const result = await apiPost("/api/simulate/live", body);
-    renderLiveResult(result);
+    const elapsedS = ((performance.now() - t0) / 1000).toFixed(1);
+    renderLiveResult(result, body, elapsedS);
   } catch (e) {
     console.error(e);
-    alert("Live simulation failed: " + e.message);
+    showInlineError(
+      "demo-error",
+      "Live simulation failed — the backend may be unreachable or still starting up. " + e.message
+    );
+    await loadHealth();
   } finally {
     btn.disabled = false;
     spinner.hidden = true;
@@ -280,7 +331,7 @@ async function runLiveSimulation() {
   }
 }
 
-function renderLiveResult(result) {
+function renderLiveResult(result, requestBody, elapsedS) {
   document.getElementById("demo-empty-state").style.display = "none";
   const points = result.points;
 
@@ -288,6 +339,7 @@ function renderLiveResult(result) {
   const qberData = points.map((p) => p.qber);
   const confData = points.map((p) => p.confidence);
   const attackShade = points.map((p) => (p.label ? p.qber : null));
+  const thresholdLine = points.map(() => result.threshold);
 
   const t = chartTheme();
   const ctx = document.getElementById("qber-chart");
@@ -328,6 +380,15 @@ function renderLiveResult(result) {
           tension: 0.25,
           yAxisID: "y1",
         },
+        {
+          label: "Escalation threshold",
+          data: thresholdLine,
+          borderColor: "rgba(245,158,11,0.55)",
+          borderDash: [2, 4],
+          pointRadius: 0,
+          borderWidth: 1,
+          yAxisID: "y1",
+        },
       ],
     },
     options: {
@@ -357,13 +418,28 @@ function renderLiveResult(result) {
   const meanQber = qberData.reduce((a, b) => a + b, 0) / qberData.length;
   const meanConf = confData.reduce((a, b) => a + b, 0) / confData.length;
   const current = points[points.length - 1];
+  const isEscalated = current.profile === "HQC-128";
 
   const profileEl = document.getElementById("stat-profile");
   profileEl.textContent = current.profile;
-  profileEl.parentElement.classList.toggle("pulse-danger", current.profile === "HQC-128");
+  profileEl.classList.toggle("is-escalated", isEscalated);
+  const profileCard = profileEl.closest(".status-card");
+  profileCard.classList.toggle("is-escalated", isEscalated);
+  profileCard.classList.toggle("pulse-active", isEscalated);
   document.getElementById("stat-escalations").textContent = escalations;
   document.getElementById("stat-qber").textContent = fmt(meanQber, 4);
   document.getElementById("stat-conf").textContent = fmt(meanConf, 3);
+
+  // Session metadata — the "instrument panel" readout of exactly what was
+  // simulated and when, reinforcing that this run is real and specific.
+  const meta = document.getElementById("session-meta");
+  meta.classList.add("live");
+  const now = new Date();
+  meta.innerHTML =
+    `<span class="session-meta-dot"></span> seed=${result.seed} · ` +
+    `${result.n_rounds} rounds · ${result.n_qubits_per_round} qubits/round · ` +
+    `attack=${requestBody.inject_attack ? "on" : "off"} · ` +
+    `computed in ${elapsedS}s · run at ${now.toLocaleTimeString()}`;
 }
 
 async function runProbe() {
@@ -427,8 +503,24 @@ async function runLiveBenchmark() {
 // ---------------------------------------------------------------------------
 // Init
 // ---------------------------------------------------------------------------
+function setupMobileNav() {
+  const toggle = document.getElementById("nav-toggle");
+  const links = document.getElementById("nav-links");
+  toggle.addEventListener("click", () => {
+    const open = links.classList.toggle("open");
+    toggle.setAttribute("aria-expanded", String(open));
+  });
+  links.querySelectorAll("a").forEach((a) =>
+    a.addEventListener("click", () => {
+      links.classList.remove("open");
+      toggle.setAttribute("aria-expanded", "false");
+    })
+  );
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   setupSliders();
+  setupMobileNav();
   loadHealth();
   loadProjectInfo();
   loadResultsSummary();
@@ -436,6 +528,11 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("run-live-btn").addEventListener("click", runLiveSimulation);
   document.getElementById("probe-btn").addEventListener("click", runProbe);
   document.getElementById("run-bench-btn").addEventListener("click", runLiveBenchmark);
+  document.getElementById("retry-connection-btn").addEventListener("click", () => {
+    loadHealth();
+    loadProjectInfo();
+    loadResultsSummary();
+  });
 
   const ghLink = document.getElementById("github-link");
   ghLink.href = "https://github.com/USERNAME/qsafe-iiot-ad";

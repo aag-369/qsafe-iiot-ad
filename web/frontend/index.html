@@ -13,13 +13,26 @@
 
 <canvas id="bg-canvas"></canvas>
 
+<div id="connectivity-banner" class="connectivity-banner" hidden>
+  <strong>Backend unreachable.</strong>
+  <span>
+    This page needs the FastAPI server running to load real data — it can't be opened as a local file.
+    Start it from the repo root with <code>uvicorn web.backend.app:app --reload --port 8000</code> and
+    open <code>http://localhost:8000</code> (not a <code>file://</code> path), then
+    <button id="retry-connection-btn" class="link-btn">retry</button>.
+  </span>
+</div>
+
 <header class="topnav">
   <div class="nav-inner">
     <a href="#top" class="brand">
       <span class="brand-mark">Q</span>
       <span class="brand-text">Q-SAFE&nbsp;IIoT-AD</span>
     </a>
-    <nav class="nav-links">
+    <button id="nav-toggle" class="nav-toggle" aria-expanded="false" aria-controls="nav-links" aria-label="Toggle navigation menu">
+      <span></span><span></span><span></span>
+    </button>
+    <nav class="nav-links" id="nav-links">
       <a href="#overview">Overview</a>
       <a href="#architecture">Architecture</a>
       <a href="#demo">Live Demo</a>
@@ -134,12 +147,17 @@
         </div>
 
         <div class="panel results-panel">
+          <div class="session-meta" id="session-meta">
+            <span class="session-meta-dot"></span> awaiting first run
+          </div>
           <div class="status-cards" id="live-status-cards">
             <div class="status-card"><div class="status-card-label">Current profile</div><div class="status-card-value" id="stat-profile">—</div></div>
             <div class="status-card"><div class="status-card-label">Escalations</div><div class="status-card-value" id="stat-escalations">—</div></div>
             <div class="status-card"><div class="status-card-label">Mean QBER</div><div class="status-card-value" id="stat-qber">—</div></div>
             <div class="status-card"><div class="status-card-label">Mean confidence</div><div class="status-card-value" id="stat-conf">—</div></div>
           </div>
+
+          <div id="demo-error" class="inline-error" hidden></div>
 
           <div class="chart-wrap">
             <canvas id="qber-chart" height="220"></canvas>
@@ -213,8 +231,11 @@ docker run --rm -p 8000:8000 qsafe-iiot-ad-web
         <div class="panel">
           <h3>Local Python</h3>
           <pre class="code-block">pip install -r web/requirements.txt
-bash scripts/setup_liboqs.sh
-uvicorn web.backend.app:app --reload --port 8000</pre>
+bash scripts/setup_liboqs.sh   # skip on native Windows without WSL —
+                                # the app runs fine without it, using a
+                                # clearly-labeled simulated KEM backend
+uvicorn web.backend.app:app --reload --port 8000
+# open http://localhost:8000 — do NOT open index.html as a file:// path</pre>
         </div>
       </div>
       <div class="stack-badges">

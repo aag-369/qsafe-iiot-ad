@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import sys
 import time
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import numpy as np
@@ -41,7 +42,14 @@ from qkd_sim.qber_stream import QBERStreamGenerator, StreamConfig  # noqa: E402
 MODELS_DIR = REPO_ROOT / "models"
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 
-app = FastAPI(title="Q-Safe IIoT-AD API", version="1.0.0")
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    _warm_up()
+    yield
+
+
+app = FastAPI(title="Q-Safe IIoT-AD API", version="1.0.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -49,8 +57,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- Lazy-loaded, process-wide singletons -----------------------------------
+# --- Process-wide singletons --------------------------------------------------
+# Both the detector (loads a Keras model from disk) and the KEM backend
+# (`get_kem_backend()` may attempt a one-time liboqs auto-detection, which on
+# a machine without liboqs built can involve a slow — or slowly-failing —
+# clone+cmake attempt before it falls back to the simulated backend) are
+# resolved once at server startup rather than on the first user request, so
+# that any slowness or fallback is visible in the server logs immediately
+# instead of silently stalling someone's first click in the browser.
 _detector_runner: DetectorRunner | None = None
+_kem_backend = None
+_threshold_cache: float | None = None
 
 
 def get_detector() -> DetectorRunner:
@@ -64,9 +81,50 @@ def get_detector() -> DetectorRunner:
     return _detector_runner
 
 
+def get_cached_kem_backend():
+    global _kem_backend
+    if _kem_backend is None:
+        _kem_backend = get_kem_backend()
+    return _kem_backend
+
+
 def _load_threshold() -> float:
-    with open(MODELS_DIR / "train_metrics.json") as f:
-        return json.load(f)["threshold"]
+    global _threshold_cache
+    if _threshold_cache is None:
+        with open(MODELS_DIR / "train_metrics.json") as f:
+            _threshold_cache = json.load(f)["threshold"]
+    return _threshold_cache
+
+
+def _warm_up() -> None:
+    print("[q-safe-iiot-ad] warming up detector + KEM backend...")
+    missing = [
+        p.name
+        for p in [
+            MODELS_DIR / "gru_detector.keras",
+            MODELS_DIR / "norm_stats.json",
+            MODELS_DIR / "train_metrics.json",
+            MODELS_DIR / "benchmark_report.json",
+            MODELS_DIR / "gru_detector_int8_size_report.json",
+        ]
+        if not p.exists()
+    ]
+    if missing:
+        print(f"[q-safe-iiot-ad] WARNING: missing model/results artifacts: {missing}. "
+              f"Run the training pipeline (see README) before starting the server.")
+    else:
+        get_detector()
+        print("[q-safe-iiot-ad] detector model loaded OK.")
+
+    backend = get_cached_kem_backend()
+    print(f"[q-safe-iiot-ad] KEM backend resolved: {type(backend).__name__} "
+          f"(liboqs_available={is_liboqs_available()}).")
+    if type(backend).__name__ != "LiboqsKEMBackend":
+        print("[q-safe-iiot-ad] NOTE: running with the SIMULATED KEM backend — "
+              "real BIKE-L1/HQC-128 cryptography is not active. Run "
+              "scripts/setup_liboqs.sh to build real liboqs. The UI will "
+              "clearly label this as 'simulated' wherever it matters.")
+    print("[q-safe-iiot-ad] startup complete — serving on this process.")
 
 
 # --- Request/response schemas -------------------------------------------------
@@ -140,7 +198,7 @@ def health():
     return {
         "status": "ok",
         "liboqs_available": is_liboqs_available(),
-        "kem_backend": type(get_kem_backend()).__name__,
+        "kem_backend": type(get_cached_kem_backend()).__name__,
         "detector_model_present": detector_ok,
     }
 
@@ -271,7 +329,7 @@ def benchmark_run(req: BenchmarkRequest):
     confidences = detector.score_stream(df)
 
     threshold = _load_threshold()
-    backend = get_kem_backend()
+    backend = get_cached_kem_backend()
 
     controller = SwitchController(
         escalate_threshold=threshold,
@@ -301,9 +359,9 @@ def benchmark_run(req: BenchmarkRequest):
         "n_attack_rounds": int(df["label"].sum()),
         "kem_backend": type(backend).__name__,
         "liboqs_available": is_liboqs_available(),
-        "operational_f1": f1_score(y_true, y_pred, zero_division=0),
-        "operational_precision": precision_score(y_true, y_pred, zero_division=0),
-        "operational_recall": recall_score(y_true, y_pred, zero_division=0),
+        "operational_f1": float(f1_score(y_true, y_pred, zero_division=0)),
+        "operational_precision": float(precision_score(y_true, y_pred, zero_division=0)),
+        "operational_recall": float(recall_score(y_true, y_pred, zero_division=0)),
         "adaptive_total_kem_latency_ms": adaptive_total_ms,
         "static_hqc128_total_kem_latency_ms": static_total_ms,
         "cpu_latency_reduction_pct": (1 - adaptive_total_ms / static_total_ms) * 100 if static_total_ms else 0,

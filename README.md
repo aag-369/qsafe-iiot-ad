@@ -160,6 +160,21 @@ docker build -t qsafe-iiot-ad-web -f web/Dockerfile .
 docker run --rm -p 8000:8000 qsafe-iiot-ad-web
 ```
 
+**Important:** open `http://localhost:8000` in your browser — do not open
+`web/frontend/index.html` directly as a `file://` path. The page's every
+"live" number comes from a `fetch("/api/...")` call to the FastAPI server
+running at that URL; without the server, those calls have nothing to reach
+and the page will show a red connectivity banner explaining exactly this.
+
+**Native Windows without WSL:** `scripts/setup_liboqs.sh` is a bash script
+and won't run directly in PowerShell/cmd. You can skip it entirely — the
+server starts fine without it and automatically falls back to a
+timing-accurate *simulated* KEM backend (see `crypto_agility/kem_backend.py`),
+which the UI labels clearly wherever it's used (nav health pill, live
+benchmark results) so you always know whether you're looking at real
+`liboqs` cryptography or the fallback. For real BIKE-L1/HQC-128 operations
+on Windows, use the Docker path above, or run the bash script inside WSL.
+
 What's on the page:
 
 - **Hero + Overview** — the abstract and headline metrics (F1, CPU/latency reduction), pulled live from `/api/project-info` and `/api/results/summary`.

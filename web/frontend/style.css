@@ -169,7 +169,7 @@ h4 { font-size: 0.95rem; color: var(--text-dim); text-transform: uppercase; lett
 
 .hero-stats { display: flex; gap: 42px; justify-content: center; flex-wrap: wrap; }
 .hero-stat { display: flex; flex-direction: column; align-items: center; }
-.hero-stat-value { font-family: var(--font-mono); font-size: 1.6rem; font-weight: 600; color: var(--cyan); }
+.hero-stat-value { font-family: var(--font-mono); font-size: 1.6rem; font-weight: 600; color: var(--cyan); text-shadow: 0 0 18px var(--cyan-glow); }
 .hero-stat-label { font-size: 0.75rem; color: var(--text-faint); margin-top: 4px; text-align: center; }
 
 .scroll-cue { color: var(--text-faint); font-size: 1.4rem; animation: bob 2s ease-in-out infinite; }
@@ -219,7 +219,20 @@ h4 { font-size: 0.95rem; color: var(--text-dim); text-transform: uppercase; lett
 .pipeline-card::before {
   content: '';
   position: absolute; top: 0; left: 0; right: 0; height: 3px;
-  background: linear-gradient(90deg, var(--cyan), var(--violet));
+  background: linear-gradient(90deg, var(--cyan), var(--violet), var(--magenta), var(--violet), var(--cyan));
+  background-size: 300% 100%;
+  animation: sweepGradient 8s linear infinite;
+}
+@keyframes sweepGradient {
+  0% { background-position: 0% 0; }
+  100% { background-position: 100% 0; }
+}
+.pipeline-card {
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+.pipeline-card:hover {
+  border-color: var(--cyan);
+  transform: translateY(-2px);
 }
 .pipeline-index { font-family: var(--font-mono); color: var(--text-faint); font-size: 0.75rem; }
 .pipeline-card h4 { color: var(--cyan); margin: 6px 0 4px; text-transform: none; letter-spacing: 0; font-size: 1.05rem; }
@@ -273,9 +286,11 @@ h4 { font-size: 0.95rem; color: var(--text-dim); text-transform: uppercase; lett
 
 .status-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
 @media (max-width: 640px) { .status-cards { grid-template-columns: repeat(2, 1fr); } }
-.status-card { background: rgba(255,255,255,0.02); border: 1px solid var(--panel-border); border-radius: 12px; padding: 14px; text-align: center; }
+.status-card { background: rgba(255,255,255,0.02); border: 1px solid var(--panel-border); border-radius: 12px; padding: 14px; text-align: center; transition: border-color 0.3s ease; }
 .status-card-label { font-size: 0.72rem; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.05em; }
 .status-card-value { font-family: var(--font-mono); font-size: 1.15rem; color: var(--cyan); margin-top: 6px; font-weight: 600; }
+.status-card-value.is-escalated { color: var(--magenta); }
+.status-card.is-escalated { border-color: rgba(232,121,249,0.5); }
 
 .chart-wrap { background: rgba(255,255,255,0.015); border-radius: 12px; padding: 16px; margin-bottom: 18px; }
 .profile-timeline-wrap { margin-top: 8px; }
@@ -335,9 +350,153 @@ h4 { font-size: 0.95rem; color: var(--text-dim); text-transform: uppercase; lett
 .footer-inner { max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; font-size: 0.85rem; color: var(--text-faint); }
 .footer-inner a:hover { color: var(--cyan); }
 
-/* Pulse for escalation state */
-.pulse-danger { animation: pulseDanger 1.4s ease-in-out infinite; }
-@keyframes pulseDanger {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.5); }
-  50% { box-shadow: 0 0 0 8px rgba(239,68,68,0); }
+/* Pulse for the escalated (HQC-128) state. HQC-128 is a normal, correctly-
+   working system state, not a fault — so this pulses magenta (the color
+   reserved for "hardened crypto active" everywhere else on the site), never
+   red (reserved exclusively for genuine failures like an unreachable
+   backend). */
+.pulse-active { animation: pulseActive 1.4s ease-in-out infinite; }
+@keyframes pulseActive {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(232,121,249,0.55); }
+  50% { box-shadow: 0 0 0 9px rgba(232,121,249,0); }
+}
+
+/* ---------- Focus states (accessibility) ---------- */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* ---------- Reduced motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  #bg-canvas { display: none; }
+  .scroll-cue, .pulse-active, .btn-spinner, .pipeline-card::before, .session-meta-dot {
+    animation: none !important;
+  }
+  * { transition-duration: 0.001ms !important; }
+}
+
+/* ---------- Connectivity banner ---------- */
+.connectivity-banner {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  background: linear-gradient(90deg, rgba(239,68,68,0.16), rgba(239,68,68,0.08));
+  border-bottom: 1px solid rgba(239,68,68,0.4);
+  color: #ffd7d7;
+  font-size: 0.85rem;
+  padding: 12px 24px;
+  text-align: center;
+  backdrop-filter: blur(8px);
+}
+.connectivity-banner strong { color: #fff; margin-right: 6px; }
+.connectivity-banner code {
+  font-family: var(--font-mono);
+  background: rgba(0,0,0,0.3);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+.link-btn {
+  background: none; border: none; padding: 0; margin: 0;
+  color: var(--cyan); text-decoration: underline; cursor: pointer;
+  font: inherit;
+}
+
+/* ---------- Nav mobile toggle ---------- */
+.nav-toggle {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  width: 32px; height: 32px;
+  background: none;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  cursor: pointer;
+  padding: 0;
+}
+.nav-toggle span { display: block; width: 16px; height: 2px; background: var(--text-dim); margin: 0 auto; transition: transform 0.2s ease, opacity 0.2s ease; }
+.nav-toggle[aria-expanded="true"] span:nth-child(1) { transform: translateY(6px) rotate(45deg); }
+.nav-toggle[aria-expanded="true"] span:nth-child(2) { opacity: 0; }
+.nav-toggle[aria-expanded="true"] span:nth-child(3) { transform: translateY(-6px) rotate(-45deg); }
+
+@media (max-width: 720px) {
+  .nav-toggle { display: flex; }
+  .nav-links {
+    position: absolute;
+    top: 100%; left: 0; right: 0;
+    flex-direction: column;
+    gap: 0;
+    background: rgba(5,7,13,0.97);
+    border-bottom: 1px solid var(--panel-border);
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.25s ease;
+  }
+  .nav-links.open { max-height: 300px; }
+  .nav-links a { padding: 14px 24px; border-top: 1px solid var(--panel-border); }
+  .nav-status { margin-left: auto; }
+}
+
+/* ---------- Session meta / instrument readout ---------- */
+.session-meta {
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--text-faint);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  letter-spacing: 0.02em;
+}
+.session-meta-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--text-faint);
+  display: inline-block;
+}
+.session-meta.live .session-meta-dot { background: var(--cyan); box-shadow: 0 0 6px var(--cyan); }
+
+/* ---------- Inline error ---------- */
+.inline-error {
+  background: rgba(239,68,68,0.08);
+  border: 1px solid rgba(239,68,68,0.35);
+  color: #ffb4b4;
+  font-size: 0.85rem;
+  padding: 12px 14px;
+  border-radius: 10px;
+  margin-bottom: 16px;
+}
+
+/* ---------- Pipeline icons + connecting flow ---------- */
+.pipeline-icon {
+  width: 30px; height: 30px;
+  color: var(--cyan);
+  margin-bottom: 10px;
+}
+.pipeline-icon svg { width: 100%; height: 100%; }
+
+@media (min-width: 1140px) {
+  .pipeline { padding-top: 4px; }
+  .pipeline::before {
+    content: '';
+    position: absolute;
+    top: -18px; left: 6%; right: 6%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--cyan-glow), var(--violet-glow), var(--magenta), transparent);
+    opacity: 0.5;
+  }
+  .pipeline-card:not(:last-child)::after {
+    content: '›';
+    position: absolute;
+    top: 18px; right: -13px;
+    font-family: var(--font-mono);
+    color: var(--text-faint);
+    font-size: 1.1rem;
+    z-index: 2;
+  }
 }
