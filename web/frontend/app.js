@@ -535,5 +535,5 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   const ghLink = document.getElementById("github-link");
-  ghLink.href = "https://github.com/USERNAME/qsafe-iiot-ad";
+  ghLink.href = "https://github.com/aag-369/qsafe-iiot-ad";
 });
