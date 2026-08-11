@@ -19,7 +19,7 @@ jobs:
           cache: "pip"
 
       - name: Install Python dependencies
-        run: pip install -r requirements.txt
+        run: pip install -r requirements.txt -r web/requirements.txt
 
       - name: Build liboqs (BIKE-L1 + HQC-128)
         run: |

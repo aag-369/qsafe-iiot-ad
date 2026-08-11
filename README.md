@@ -98,6 +98,9 @@ qsafe-iiot-ad/
 ├── ai_detector/         # GRU model, feature engineering, training, INT8 quantization
 ├── crypto_agility/      # liboqs KEM backend (BIKE-L1 / HQC-128) + switch controller
 ├── orchestrator/        # End-to-end pipeline + adaptive-vs-static benchmark harness
+├── web/                 # Quantum-themed web dashboard (FastAPI backend + static frontend)
+│   ├── backend/app.py    #   wraps the real project modules — no mocked data
+│   └── frontend/         #   dark quantum-computing / critical-infra themed UI
 ├── firmware_notes/       # ARM Cortex-M4 / TFLite Micro deployment guide
 ├── tests/               # pytest unit + integration tests (24 tests)
 ├── scripts/setup_liboqs.sh  # Builds liboqs (BIKE-L1 + HQC-128 only) from source
@@ -132,6 +135,38 @@ bash scripts/setup_liboqs.sh
 
 pytest tests/ -v
 ```
+
+## Web dashboard
+
+A full-stack, quantum/critical-infrastructure-themed website in `web/` puts
+this entire pipeline behind a browser UI — it's not a mockup with canned
+numbers, the FastAPI backend in `web/backend/app.py` directly imports and
+calls `qkd_sim`, `ai_detector`, `crypto_agility`, and `orchestrator`, so
+every chart is either the committed benchmark run or a request-time result
+from a real Qiskit BB84 simulation, the trained GRU, and real `liboqs` KEM
+operations.
+
+```bash
+pip install -r web/requirements.txt
+bash scripts/setup_liboqs.sh   # skip if already built (see above)
+uvicorn web.backend.app:app --reload --port 8000
+# open http://localhost:8000
+```
+
+Or with Docker (build from the repo root):
+
+```bash
+docker build -t qsafe-iiot-ad-web -f web/Dockerfile .
+docker run --rm -p 8000:8000 qsafe-iiot-ad-web
+```
+
+What's on the page:
+
+- **Hero + Overview** — the abstract and headline metrics (F1, CPU/latency reduction), pulled live from `/api/project-info` and `/api/results/summary`.
+- **Architecture** — the four-stage pipeline (QKD → AI detection → crypto-agility → orchestration) as cards.
+- **Live Demo** — generates a fresh BB84 QBER stream on request (adjustable rounds/qubits/attack intensity), scores it with the trained GRU, and animates the resulting BIKE-L1 ↔ HQC-128 profile switching on a real-time chart, plus a single-round "probe" widget for one BB84 circuit at a time.
+- **Benchmarks** — the committed F1/precision/recall/AUC and KEM-latency-reduction numbers as charts, plus a "run live benchmark" button that executes real liboqs BIKE-L1/HQC-128 handshakes for a fresh stream on demand.
+- **Deploy** — Docker/local run instructions and the tech stack.
 
 ## Reproducing the results
 

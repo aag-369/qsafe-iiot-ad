@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Q-Safe IIoT-AD — Crypto-Agile, AI-Gated Post-Quantum Security</title>
+<meta name="description" content="A crypto-agile, AI-gated post-quantum security framework for resource-constrained Industrial IoT infrastructures." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<canvas id="bg-canvas"></canvas>
+
+<header class="topnav">
+  <div class="nav-inner">
+    <a href="#top" class="brand">
+      <span class="brand-mark">Q</span>
+      <span class="brand-text">Q-SAFE&nbsp;IIoT-AD</span>
+    </a>
+    <nav class="nav-links">
+      <a href="#overview">Overview</a>
+      <a href="#architecture">Architecture</a>
+      <a href="#demo">Live Demo</a>
+      <a href="#benchmarks">Benchmarks</a>
+      <a href="#deploy">Deploy</a>
+    </nav>
+    <div class="nav-status">
+      <span id="health-dot" class="status-dot status-pending"></span>
+      <span id="health-label">connecting…</span>
+    </div>
+  </div>
+</header>
+
+<main id="top">
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-grid-overlay"></div>
+    <div class="hero-content">
+      <div class="eyebrow">POST-QUANTUM &middot; CRYPTO-AGILE &middot; AI-GATED &middot; CRITICAL INFRASTRUCTURE</div>
+      <h1>Q-Safe <span class="grad-text">IIoT-AD</span></h1>
+      <p class="hero-subtitle">
+        A crypto-agile, AI-gated post-quantum security framework for resource-constrained
+        Industrial IoT infrastructures — watching the quantum channel, gating the crypto cost.
+      </p>
+      <div class="hero-cta">
+        <a href="#demo" class="btn btn-primary">Launch Live Simulation</a>
+        <a href="#benchmarks" class="btn btn-ghost">View Benchmarks</a>
+      </div>
+      <div class="hero-stats" id="hero-stats">
+        <div class="hero-stat"><span class="hero-stat-value" data-stat="f1">—</span><span class="hero-stat-label">Detector F1</span></div>
+        <div class="hero-stat"><span class="hero-stat-value" data-stat="cpu">—</span><span class="hero-stat-label">CPU/Latency Reduction</span></div>
+        <div class="hero-stat"><span class="hero-stat-value">Real</span><span class="hero-stat-label">liboqs BIKE-L1 / HQC-128</span></div>
+      </div>
+    </div>
+    <div class="scroll-cue">▾</div>
+  </section>
+
+  <!-- OVERVIEW -->
+  <section id="overview" class="section">
+    <div class="section-inner">
+      <div class="section-kicker">Overview</div>
+      <h2>Watch the channel. Escalate only when it matters.</h2>
+      <p class="lede" id="abstract-text">
+        Contemporary IIoT deployments remain anchored to RSA/ECC, which face existential
+        polynomial-time vulnerability under Shor's algorithm once a Cryptographically Relevant
+        Quantum Computer (CRQC) exists — including retroactively, via "Harvest Now, Decrypt Later"
+        interception happening today. Statically running a hardened post-quantum profile at all
+        times is prohibitively expensive on Cortex-M4-class edge hardware. Q-Safe IIoT-AD instead
+        monitors physical-layer QKD telemetry with a lightweight GRU and escalates crypto strength
+        only on real evidence of interception.
+      </p>
+      <div class="keyword-chips" id="keyword-chips"></div>
+    </div>
+  </section>
+
+  <!-- ARCHITECTURE -->
+  <section id="architecture" class="section section-alt">
+    <div class="section-inner">
+      <div class="section-kicker">Architecture</div>
+      <h2>Four layers, one adaptive loop</h2>
+      <div class="pipeline" id="pipeline"></div>
+    </div>
+  </section>
+
+  <!-- LIVE DEMO -->
+  <section id="demo" class="section">
+    <div class="section-inner">
+      <div class="section-kicker">Live Demo</div>
+      <h2>Run the real pipeline</h2>
+      <p class="lede">
+        Every point below is computed on request: a fresh Qiskit BB84 stream is generated,
+        scored by the trained GRU detector, and translated into live BIKE-L1 / HQC-128
+        crypto-profile decisions by the hysteresis switch controller.
+      </p>
+
+      <div class="demo-grid">
+        <div class="panel controls-panel">
+          <h3>Simulation controls</h3>
+
+          <label class="field">
+            <span>Rounds <b id="rounds-val">80</b></span>
+            <input type="range" id="rounds" min="20" max="300" value="80" step="10">
+          </label>
+          <label class="field">
+            <span>Qubits / round <b id="qubits-val">48</b></span>
+            <input type="range" id="qubits" min="16" max="128" value="48" step="8">
+          </label>
+          <label class="field toggle-field">
+            <span>Inject eavesdropper (HNDL-style)</span>
+            <input type="checkbox" id="inject-attack" checked>
+          </label>
+          <label class="field">
+            <span>Attack intensity <b id="intensity-val">0.35</b></span>
+            <input type="range" id="intensity" min="0.05" max="0.9" value="0.35" step="0.05">
+          </label>
+
+          <button id="run-live-btn" class="btn btn-primary btn-block">
+            <span class="btn-label">Run Live Simulation</span>
+            <span class="btn-spinner" hidden></span>
+          </button>
+
+          <div class="probe-widget">
+            <h4>Single-round probe</h4>
+            <label class="field">
+              <span>Eve intercept prob. <b id="probe-eve-val">0.00</b></span>
+              <input type="range" id="probe-eve" min="0" max="1" value="0" step="0.05">
+            </label>
+            <button id="probe-btn" class="btn btn-ghost btn-block btn-sm">Measure One BB84 Round</button>
+            <div id="probe-result" class="probe-result">—</div>
+          </div>
+        </div>
+
+        <div class="panel results-panel">
+          <div class="status-cards" id="live-status-cards">
+            <div class="status-card"><div class="status-card-label">Current profile</div><div class="status-card-value" id="stat-profile">—</div></div>
+            <div class="status-card"><div class="status-card-label">Escalations</div><div class="status-card-value" id="stat-escalations">—</div></div>
+            <div class="status-card"><div class="status-card-label">Mean QBER</div><div class="status-card-value" id="stat-qber">—</div></div>
+            <div class="status-card"><div class="status-card-label">Mean confidence</div><div class="status-card-value" id="stat-conf">—</div></div>
+          </div>
+
+          <div class="chart-wrap">
+            <canvas id="qber-chart" height="220"></canvas>
+          </div>
+          <div class="profile-timeline-wrap">
+            <div class="chart-label">Crypto profile timeline</div>
+            <div id="profile-timeline" class="profile-timeline"></div>
+            <div class="timeline-legend">
+              <span><i class="dot dot-bike"></i> BIKE-L1 (baseline)</span>
+              <span><i class="dot dot-hqc"></i> HQC-128 (hardened)</span>
+            </div>
+          </div>
+          <div id="demo-empty-state" class="empty-state">Run a live simulation to see real BB84 → GRU → crypto-switch output here.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- BENCHMARKS -->
+  <section id="benchmarks" class="section section-alt">
+    <div class="section-inner">
+      <div class="section-kicker">Benchmarks</div>
+      <h2>Measured, not assumed</h2>
+      <p class="lede">
+        Precomputed from a committed training run (regenerate anytime — see the repo). The
+        detector never sees the benchmark stream during training.
+      </p>
+
+      <div class="metric-cards" id="metric-cards"></div>
+
+      <div class="benchmark-grid">
+        <div class="panel">
+          <h3>KEM latency: adaptive vs. static HQC-128</h3>
+          <canvas id="latency-chart" height="220"></canvas>
+        </div>
+        <div class="panel">
+          <h3>Detector model size (INT8 quantization)</h3>
+          <canvas id="size-chart" height="220"></canvas>
+        </div>
+      </div>
+
+      <div class="panel live-bench-panel">
+        <div class="live-bench-header">
+          <h3>Run a live benchmark</h3>
+          <label class="field inline-field">
+            <span>Rounds <b id="bench-rounds-val">120</b></span>
+            <input type="range" id="bench-rounds" min="40" max="400" value="120" step="20">
+          </label>
+          <button id="run-bench-btn" class="btn btn-primary">
+            <span class="btn-label">Run Live Benchmark (real liboqs)</span>
+            <span class="btn-spinner" hidden></span>
+          </button>
+        </div>
+        <div id="bench-result" class="bench-result"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DEPLOY -->
+  <section id="deploy" class="section">
+    <div class="section-inner">
+      <div class="section-kicker">Deploy</div>
+      <h2>Run it yourself</h2>
+      <div class="deploy-grid">
+        <div class="panel">
+          <h3>Docker</h3>
+          <pre class="code-block">docker build -t qsafe-iiot-ad-web -f web/Dockerfile .
+docker run --rm -p 8000:8000 qsafe-iiot-ad-web
+# open http://localhost:8000</pre>
+        </div>
+        <div class="panel">
+          <h3>Local Python</h3>
+          <pre class="code-block">pip install -r web/requirements.txt
+bash scripts/setup_liboqs.sh
+uvicorn web.backend.app:app --reload --port 8000</pre>
+        </div>
+      </div>
+      <div class="stack-badges">
+        <span>Qiskit</span><span>Qiskit Aer</span><span>TensorFlow</span><span>TFLite Micro</span>
+        <span>liboqs (BIKE-L1 / HQC-128)</span><span>FastAPI</span><span>Docker</span><span>GitHub Actions CI</span>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div>Q-Safe IIoT-AD — MIT License</div>
+    <a href="https://github.com" id="github-link" target="_blank" rel="noopener">View on GitHub →</a>
+  </div>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,442 @@
+// Q-Safe IIoT-AD — frontend logic. Talks to the FastAPI backend in
+// web/backend/app.py, which wraps the real project modules. No fake data
+// is hard-coded here beyond the hero copy (which mirrors PROJECT_INFO and
+// is overwritten by the API response on load).
+
+const API = ""; // same-origin (FastAPI serves this file too)
+
+// ---------------------------------------------------------------------------
+// Background "quantum network" particle animation
+// ---------------------------------------------------------------------------
+(function particleBackground() {
+  const canvas = document.getElementById("bg-canvas");
+  const ctx = canvas.getContext("2d");
+  let w, h, particles;
+
+  function resize() {
+    w = canvas.width = window.innerWidth;
+    h = canvas.height = window.innerHeight;
+  }
+  window.addEventListener("resize", resize);
+  resize();
+
+  const N = Math.min(70, Math.floor((window.innerWidth * window.innerHeight) / 22000));
+  particles = Array.from({ length: N }, () => ({
+    x: Math.random() * w,
+    y: Math.random() * h,
+    vx: (Math.random() - 0.5) * 0.25,
+    vy: (Math.random() - 0.5) * 0.25,
+    r: Math.random() * 1.6 + 0.6,
+  }));
+
+  function step() {
+    ctx.clearRect(0, 0, w, h);
+    for (const p of particles) {
+      p.x += p.vx;
+      p.y += p.vy;
+      if (p.x < 0 || p.x > w) p.vx *= -1;
+      if (p.y < 0 || p.y > h) p.vy *= -1;
+    }
+    for (let i = 0; i < particles.length; i++) {
+      for (let j = i + 1; j < particles.length; j++) {
+        const a = particles[i], b = particles[j];
+        const d = Math.hypot(a.x - b.x, a.y - b.y);
+        if (d < 140) {
+          ctx.strokeStyle = `rgba(34, 211, 238, ${0.12 * (1 - d / 140)})`;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
+          ctx.stroke();
+        }
+      }
+    }
+    for (const p of particles) {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(168, 85, 247, 0.65)";
+      ctx.fill();
+    }
+    requestAnimationFrame(step);
+  }
+  step();
+})();
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+async function apiGet(path) {
+  const res = await fetch(API + path);
+  if (!res.ok) throw new Error(`${path} -> ${res.status}`);
+  return res.json();
+}
+async function apiPost(path, body) {
+  const res = await fetch(API + path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body || {}),
+  });
+  if (!res.ok) throw new Error(`${path} -> ${res.status}`);
+  return res.json();
+}
+function fmt(n, d = 3) {
+  if (n === null || n === undefined || Number.isNaN(n)) return "—";
+  return Number(n).toFixed(d);
+}
+function pct(n, d = 1) {
+  if (n === null || n === undefined || Number.isNaN(n)) return "—";
+  return Number(n).toFixed(d) + "%";
+}
+
+// ---------------------------------------------------------------------------
+// Health check
+// ---------------------------------------------------------------------------
+async function loadHealth() {
+  const dot = document.getElementById("health-dot");
+  const label = document.getElementById("health-label");
+  try {
+    const h = await apiGet("/api/health");
+    dot.className = "status-dot " + (h.liboqs_available ? "status-ok" : "status-bad");
+    label.textContent = h.liboqs_available
+      ? `liboqs online · ${h.kem_backend}`
+      : `simulated KEM fallback`;
+  } catch (e) {
+    dot.className = "status-dot status-bad";
+    label.textContent = "backend unreachable";
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Project info (hero stats, keywords, pipeline)
+// ---------------------------------------------------------------------------
+async function loadProjectInfo() {
+  try {
+    const info = await apiGet("/api/project-info");
+    document.getElementById("abstract-text").textContent = info.abstract;
+
+    const chips = document.getElementById("keyword-chips");
+    chips.innerHTML = "";
+    info.keywords.forEach((k) => {
+      const s = document.createElement("span");
+      s.className = "chip";
+      s.textContent = k;
+      chips.appendChild(s);
+    });
+
+    const pipeline = document.getElementById("pipeline");
+    pipeline.innerHTML = "";
+    info.pipeline.forEach((stage, i) => {
+      const card = document.createElement("div");
+      card.className = "pipeline-card";
+      card.innerHTML = `
+        <div class="pipeline-index">STAGE ${String(i + 1).padStart(2, "0")}</div>
+        <h4>${stage.stage}</h4>
+        <span class="pipeline-module">${stage.module}</span>
+        <p class="pipeline-desc">${stage.description}</p>
+      `;
+      pipeline.appendChild(card);
+    });
+  } catch (e) {
+    console.error("project-info failed", e);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Results summary (hero stats + benchmark cards + charts)
+// ---------------------------------------------------------------------------
+let latencyChart, sizeChart, qberChart;
+
+async function loadResultsSummary() {
+  try {
+    const summary = await apiGet("/api/results/summary");
+    const tm = summary.train_metrics;
+    const bm = summary.benchmark;
+    const qz = summary.quantization;
+
+    document.querySelector('[data-stat="f1"]').textContent = fmt(tm.f1, 3);
+    document.querySelector('[data-stat="cpu"]').textContent = pct(bm.cpu_latency_reduction_pct, 1);
+
+    const cards = document.getElementById("metric-cards");
+    cards.innerHTML = "";
+    const metrics = [
+      ["Detector F1", fmt(tm.f1, 3)],
+      ["Precision", fmt(tm.precision, 3)],
+      ["Recall", fmt(tm.recall, 3)],
+      ["ROC-AUC", fmt(tm.roc_auc, 3)],
+      ["Operational F1", fmt(bm.operational_f1, 3)],
+      ["CPU/Latency Saved", pct(bm.cpu_latency_reduction_pct, 1)],
+    ];
+    metrics.forEach(([label, value]) => {
+      const el = document.createElement("div");
+      el.className = "metric-card";
+      el.innerHTML = `<div class="metric-value">${value}</div><div class="metric-label">${label}</div>`;
+      cards.appendChild(el);
+    });
+
+    renderLatencyChart(bm.adaptive_total_kem_latency_ms, bm.static_hqc128_total_kem_latency_ms);
+    renderSizeChart(qz.tflite_fp32_bytes, qz.tflite_int8_bytes);
+  } catch (e) {
+    console.error("results-summary failed", e);
+  }
+}
+
+function chartTheme() {
+  return {
+    color: "#93a1c2",
+    grid: "rgba(255,255,255,0.06)",
+  };
+}
+
+function renderLatencyChart(adaptiveMs, staticMs) {
+  const t = chartTheme();
+  const ctx = document.getElementById("latency-chart");
+  if (latencyChart) latencyChart.destroy();
+  latencyChart = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: ["AI-gated adaptive", "Static always-on HQC-128"],
+      datasets: [{
+        data: [adaptiveMs, staticMs],
+        backgroundColor: ["#22d3ee", "#e879f9"],
+        borderRadius: 6,
+      }],
+    },
+    options: {
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: t.color }, grid: { display: false } },
+        y: { ticks: { color: t.color }, grid: { color: t.grid }, title: { display: true, text: "ms total KEM latency", color: t.color } },
+      },
+    },
+  });
+}
+
+function renderSizeChart(fp32, int8) {
+  const t = chartTheme();
+  const ctx = document.getElementById("size-chart");
+  if (sizeChart) sizeChart.destroy();
+  sizeChart = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: ["Float32 TFLite", "INT8 TFLite"],
+      datasets: [{
+        data: [fp32 / 1024, int8 / 1024],
+        backgroundColor: ["#a855f7", "#22d3ee"],
+        borderRadius: 6,
+      }],
+    },
+    options: {
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: t.color }, grid: { display: false } },
+        y: { ticks: { color: t.color }, grid: { color: t.grid }, title: { display: true, text: "KB", color: t.color } },
+      },
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Live simulation
+// ---------------------------------------------------------------------------
+function setupSliders() {
+  const bind = (id, valId, fmtFn) => {
+    const input = document.getElementById(id);
+    const out = document.getElementById(valId);
+    const update = () => (out.textContent = fmtFn ? fmtFn(input.value) : input.value);
+    input.addEventListener("input", update);
+    update();
+  };
+  bind("rounds", "rounds-val");
+  bind("qubits", "qubits-val");
+  bind("intensity", "intensity-val", (v) => Number(v).toFixed(2));
+  bind("probe-eve", "probe-eve-val", (v) => Number(v).toFixed(2));
+  bind("bench-rounds", "bench-rounds-val");
+}
+
+async function runLiveSimulation() {
+  const btn = document.getElementById("run-live-btn");
+  const spinner = btn.querySelector(".btn-spinner");
+  const label = btn.querySelector(".btn-label");
+  btn.disabled = true;
+  spinner.hidden = false;
+  label.textContent = "Simulating…";
+
+  try {
+    const body = {
+      n_rounds: Number(document.getElementById("rounds").value),
+      n_qubits_per_round: Number(document.getElementById("qubits").value),
+      inject_attack: document.getElementById("inject-attack").checked,
+      attack_intensity: Number(document.getElementById("intensity").value),
+    };
+    const result = await apiPost("/api/simulate/live", body);
+    renderLiveResult(result);
+  } catch (e) {
+    console.error(e);
+    alert("Live simulation failed: " + e.message);
+  } finally {
+    btn.disabled = false;
+    spinner.hidden = true;
+    label.textContent = "Run Live Simulation";
+  }
+}
+
+function renderLiveResult(result) {
+  document.getElementById("demo-empty-state").style.display = "none";
+  const points = result.points;
+
+  const labels = points.map((p) => p.t);
+  const qberData = points.map((p) => p.qber);
+  const confData = points.map((p) => p.confidence);
+  const attackShade = points.map((p) => (p.label ? p.qber : null));
+
+  const t = chartTheme();
+  const ctx = document.getElementById("qber-chart");
+  if (qberChart) qberChart.destroy();
+  qberChart = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels,
+      datasets: [
+        {
+          label: "QBER",
+          data: qberData,
+          borderColor: "#22d3ee",
+          backgroundColor: "rgba(34,211,238,0.08)",
+          pointRadius: 0,
+          borderWidth: 2,
+          tension: 0.25,
+          fill: true,
+          yAxisID: "y",
+        },
+        {
+          label: "Ground-truth attack (QBER)",
+          data: attackShade,
+          borderColor: "transparent",
+          backgroundColor: "rgba(239,68,68,0.35)",
+          pointRadius: 0,
+          borderWidth: 0,
+          fill: true,
+          yAxisID: "y",
+        },
+        {
+          label: "Detector confidence",
+          data: confData,
+          borderColor: "#a855f7",
+          borderDash: [4, 3],
+          pointRadius: 0,
+          borderWidth: 2,
+          tension: 0.25,
+          yAxisID: "y1",
+        },
+      ],
+    },
+    options: {
+      interaction: { mode: "index", intersect: false },
+      plugins: { legend: { labels: { color: t.color, font: { size: 11 } } } },
+      scales: {
+        x: { ticks: { color: t.color, maxTicksLimit: 10 }, grid: { display: false }, title: { display: true, text: "round", color: t.color } },
+        y: { position: "left", min: 0, ticks: { color: t.color }, grid: { color: t.grid }, title: { display: true, text: "QBER", color: t.color } },
+        y1: { position: "right", min: 0, max: 1, ticks: { color: t.color }, grid: { display: false }, title: { display: true, text: "confidence", color: t.color } },
+      },
+    },
+  });
+
+  // Profile timeline strip
+  const timeline = document.getElementById("profile-timeline");
+  timeline.innerHTML = "";
+  points.forEach((p) => {
+    const tick = document.createElement("div");
+    tick.className = "tick";
+    tick.style.background = p.profile === "HQC-128" ? "#e879f9" : "#22d3ee";
+    tick.title = `t=${p.t} · ${p.profile} · qber=${p.qber.toFixed(4)} · conf=${p.confidence.toFixed(2)}`;
+    timeline.appendChild(tick);
+  });
+
+  // Status cards
+  const escalations = points.filter((p) => p.escalated).length;
+  const meanQber = qberData.reduce((a, b) => a + b, 0) / qberData.length;
+  const meanConf = confData.reduce((a, b) => a + b, 0) / confData.length;
+  const current = points[points.length - 1];
+
+  const profileEl = document.getElementById("stat-profile");
+  profileEl.textContent = current.profile;
+  profileEl.parentElement.classList.toggle("pulse-danger", current.profile === "HQC-128");
+  document.getElementById("stat-escalations").textContent = escalations;
+  document.getElementById("stat-qber").textContent = fmt(meanQber, 4);
+  document.getElementById("stat-conf").textContent = fmt(meanConf, 3);
+}
+
+async function runProbe() {
+  const btn = document.getElementById("probe-btn");
+  const out = document.getElementById("probe-result");
+  btn.disabled = true;
+  out.textContent = "Running one real BB84 circuit on Qiskit Aer…";
+  try {
+    const eve = Number(document.getElementById("probe-eve").value);
+    const result = await apiPost("/api/simulate/probe", {
+      n_qubits: 64,
+      channel_error_prob: 0.02,
+      eve_intercept_prob: eve,
+    });
+    out.textContent =
+      `QBER = ${result.qber.toFixed(4)}  |  sifted key = ${result.sifted_key_length} bits  |  ` +
+      `intercepted = ${result.n_intercepted}/${result.n_qubits}  |  ${result.simulation_time_ms.toFixed(1)} ms`;
+  } catch (e) {
+    out.textContent = "Probe failed: " + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Live benchmark
+// ---------------------------------------------------------------------------
+async function runLiveBenchmark() {
+  const btn = document.getElementById("run-bench-btn");
+  const spinner = btn.querySelector(".btn-spinner");
+  const label = btn.querySelector(".btn-label");
+  const out = document.getElementById("bench-result");
+  btn.disabled = true;
+  spinner.hidden = false;
+  label.textContent = "Running real liboqs KEM ops…";
+  out.innerHTML = "";
+
+  try {
+    const n_rounds = Number(document.getElementById("bench-rounds").value);
+    const r = await apiPost("/api/benchmark/run", { n_rounds, n_qubits_per_round: 48 });
+    out.innerHTML = `
+      <table>
+        <tr><td>KEM backend</td><td>${r.kem_backend}${r.liboqs_available ? " (real liboqs)" : " (simulated)"}</td></tr>
+        <tr><td>Rounds simulated</td><td>${r.n_rounds} (${r.n_attack_rounds} attack rounds)</td></tr>
+        <tr><td>Operational F1 / Precision / Recall</td><td>${fmt(r.operational_f1)} / ${fmt(r.operational_precision)} / ${fmt(r.operational_recall)}</td></tr>
+        <tr><td>Adaptive total KEM latency</td><td>${fmt(r.adaptive_total_kem_latency_ms, 1)} ms</td></tr>
+        <tr><td>Static HQC-128 total KEM latency</td><td>${fmt(r.static_hqc128_total_kem_latency_ms, 1)} ms</td></tr>
+        <tr><td>CPU / latency reduction</td><td>${pct(r.cpu_latency_reduction_pct, 1)}</td></tr>
+        <tr><td>Rounds on BIKE-L1 / HQC-128</td><td>${r.rounds_on_bike_l1} / ${r.rounds_on_hqc128}</td></tr>
+      </table>
+    `;
+  } catch (e) {
+    out.textContent = "Benchmark failed: " + e.message;
+  } finally {
+    btn.disabled = false;
+    spinner.hidden = true;
+    label.textContent = "Run Live Benchmark (real liboqs)";
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Init
+// ---------------------------------------------------------------------------
+document.addEventListener("DOMContentLoaded", () => {
+  setupSliders();
+  loadHealth();
+  loadProjectInfo();
+  loadResultsSummary();
+
+  document.getElementById("run-live-btn").addEventListener("click", runLiveSimulation);
+  document.getElementById("probe-btn").addEventListener("click", runProbe);
+  document.getElementById("run-bench-btn").addEventListener("click", runLiveBenchmark);
+
+  const ghLink = document.getElementById("github-link");
+  ghLink.href = "https://github.com/USERNAME/qsafe-iiot-ad";
+});
