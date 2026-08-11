@@ -334,6 +334,9 @@ h4 { font-size: 0.95rem; color: var(--text-dim); text-transform: uppercase; lett
   overflow-x: auto;
   white-space: pre;
 }
+.about-panel { max-width: 820px; }
+.about-links { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 22px; }
+
 .stack-badges { display: flex; flex-wrap: wrap; gap: 10px; }
 .stack-badges span {
   font-family: var(--font-mono);
