@@ -1,0 +1,27 @@
+__pycache__/
+*.py[cod]
+*.bak
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Generated QBER telemetry streams are large and fully reproducible from a
+# fixed seed (see qkd_sim/qber_stream.py) — regenerate with:
+#   python -m qkd_sim.qber_stream --out data/qber_train.csv --rounds 7000 --seed 42
+data/*.csv
+models/benchmark_rounds.csv
+
+# Trained model weights, quantized TFLite artifacts, and benchmark/metric
+# reports ARE committed (see models/) so the repo is inspectable without a
+# full retrain — they are small (<500KB total).
+
+# OS/editor cruft
+.DS_Store
+.idea/
+.vscode/
+*.swp

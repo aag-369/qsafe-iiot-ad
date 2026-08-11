@@ -1,0 +1,21 @@
+{
+  "stream": "data/qber_test.csv",
+  "n_rounds": 2000,
+  "n_attack_rounds": 304,
+  "liboqs_available": true,
+  "kem_backend": "LiboqsKEMBackend",
+  "escalate_threshold": 0.8600000000000002,
+  "de_escalate_threshold": 0.5,
+  "cooldown_rounds": 4,
+  "detector_f1_from_training": 0.9357495881383855,
+  "operational_f1": 0.8665667166416792,
+  "operational_precision": 0.7961432506887053,
+  "operational_recall": 0.9506578947368421,
+  "adaptive_total_kem_latency_ms": 3939.0056140055094,
+  "static_hqc128_total_kem_latency_ms": 14673.855117002404,
+  "cpu_latency_reduction_pct": 73.15630021832888,
+  "rounds_on_bike_l1_baseline": 1637,
+  "rounds_on_hqc128_hardened": 363,
+  "wall_clock_adaptive_scenario_s": 4.021832704544067,
+  "wall_clock_static_scenario_s": 14.81710147857666
+}

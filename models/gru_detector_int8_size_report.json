@@ -1,0 +1,5 @@
+{
+  "tflite_fp32_bytes": 88552,
+  "tflite_int8_bytes": 80632,
+  "reduction_pct": 8.943897371036226
+}

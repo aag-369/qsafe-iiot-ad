@@ -1,0 +1,17 @@
+{
+  "f1": 0.9357495881383855,
+  "precision": 0.9372937293729373,
+  "recall": 0.9342105263157895,
+  "roc_auc": 0.9923304459718169,
+  "threshold": 0.8600000000000002,
+  "n_train_windows": 5584,
+  "n_val_windows": 1397,
+  "n_test_windows": 1981,
+  "trainable_params": 4097,
+  "window_size": 20,
+  "features": [
+    "qber",
+    "qber_delta",
+    "qber_rolling_std"
+  ]
+}

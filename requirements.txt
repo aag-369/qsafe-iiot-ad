@@ -1,0 +1,16 @@
+qiskit==2.5.1
+qiskit-aer>=0.15
+numpy>=1.26
+pandas>=2.0
+scikit-learn>=1.4
+tensorflow-cpu>=2.16
+liboqs-python==0.16.0
+
+# Build-time only (used to compile liboqs's C library if it is not already
+# installed system-wide; see scripts/setup_liboqs.sh). Not required at
+# runtime once ~/_oqs is built.
+cmake>=3.27
+ninja>=1.11
+
+# Dev / test
+pytest>=8.0
