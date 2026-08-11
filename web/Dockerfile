@@ -24,6 +24,10 @@ RUN bash scripts/setup_liboqs.sh
 COPY . .
 
 ENV TF_CPP_MIN_LOG_LEVEL=3
+# Hosted platforms (Render, Railway, Fly.io, etc.) inject a PORT env var and
+# require the app to bind to it; default to 8000 for plain `docker run`.
+ENV PORT=8000
 EXPOSE 8000
 
-CMD ["uvicorn", "web.backend.app:app", "--host", "0.0.0.0", "--port", "8000"]
+# Shell form (not exec-form JSON array) so $PORT is actually expanded.
+CMD uvicorn web.backend.app:app --host 0.0.0.0 --port ${PORT}

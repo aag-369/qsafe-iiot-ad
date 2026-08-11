@@ -1,0 +1,26 @@
+# Render.com deployment blueprint for the Q-Safe IIoT-AD web dashboard.
+#
+# Usage:
+#   1. Push this repo to GitHub (see README "Publishing to your GitHub account").
+#   2. In the Render dashboard: New + -> Blueprint -> connect this repo.
+#   3. Render reads this file automatically and provisions the service below.
+#   4. First build takes several minutes (TensorFlow + building liboqs from
+#      source) — subsequent deploys reuse Docker layer caching and are faster.
+#
+# Free-tier services on Render sleep after 15 minutes of inactivity and take
+# ~30-60s to wake on the next request (the liboqs/model warm-up in
+# web/backend/app.py's startup handler runs during that wake, so the first
+# request after a sleep will be slower than subsequent ones). Upgrade the
+# plan below to keep it always-on.
+
+services:
+  - type: web
+    name: qsafe-iiot-ad
+    runtime: docker
+    dockerfilePath: ./web/Dockerfile
+    dockerContext: .
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: TF_CPP_MIN_LOG_LEVEL
+        value: "3"

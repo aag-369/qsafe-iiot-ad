@@ -175,6 +175,41 @@ benchmark results) so you always know whether you're looking at real
 `liboqs` cryptography or the fallback. For real BIKE-L1/HQC-128 operations
 on Windows, use the Docker path above, or run the bash script inside WSL.
 
+### Getting a public URL (deploy to Render)
+
+Everything above runs locally only. To get an actual `https://...` link you
+can share, deploy the container to a host that runs Docker — this repo
+includes a ready-made [Render](https://render.com) blueprint
+(`render.yaml`) at the repo root. Render's free tier needs no credit card.
+
+1. Push this repo to your own GitHub account (see "Publishing to your
+   GitHub account" below) — Render deploys from a connected GitHub repo, so
+   this step has to happen first.
+2. Go to [dashboard.render.com](https://dashboard.render.com) → **New +**
+   → **Blueprint** → connect the `qsafe-iiot-ad` repo you just pushed.
+3. Render reads `render.yaml` automatically and provisions one Docker web
+   service (`qsafe-iiot-ad`) built from `web/Dockerfile`, with a health
+   check on `/api/health`. Click **Apply** / **Deploy**.
+4. First build takes several minutes (installing TensorFlow and building
+   `liboqs` from source inside the container) — watch the build log in the
+   Render dashboard. Once it says "Live", your public URL is
+   `https://qsafe-iiot-ad-<random-suffix>.onrender.com` (Render shows the
+   exact URL at the top of the service page).
+
+Free-tier services sleep after 15 minutes idle and take ~30-60s to wake on
+the next visit (the model/liboqs warm-up in `web/backend/app.py` runs
+during that wake) — upgrade the plan in `render.yaml` for an always-on
+instance. Railway and Fly.io are equally viable alternatives; both also
+build directly from `web/Dockerfile` with minimal changes (Railway
+auto-detects it with no config file needed; Fly.io needs `fly launch`
+pointed at `web/Dockerfile` plus a `fly.toml`, not included here).
+
+**Note:** I can prepare and commit all of the config above, but actually
+clicking through Render's dashboard to connect your GitHub account and
+deploy has to happen on your end — it's tied to your account, and no
+hosting connector is available in this environment for me to do it for
+you directly.
+
 What's on the page:
 
 - **Hero + Overview** — the abstract and headline metrics (F1, CPU/latency reduction), pulled live from `/api/project-info` and `/api/results/summary`.
