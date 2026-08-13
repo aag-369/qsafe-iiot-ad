@@ -65,6 +65,22 @@ flowchart LR
 | Detection | `ai_detector/` | A 2-layer GRU (trained with `tf.keras`) classifies each round as benign channel noise vs. active interception; quantized to TFLite for embedded deployment. |
 | Crypto-agility | `crypto_agility/` | Wraps real `liboqs` KEM operations for BIKE-L1 and HQC-128, with a hysteresis-based switch controller driven by the detector's confidence score. |
 | Orchestration | `orchestrator/` | Runs the full pipeline round-by-round and benchmarks the AI-gated adaptive scheme against a static always-on-HQC-128 baseline. |
+| Fleet correlation | `fleet/` | Additive: runs several devices through the same pipeline in parallel, tags each round with an attack-*type* classifier (eavesdrop/jamming/pns), and flags a coordinated multi-device campaign only when devices escalate *and* agree on attack type at the same time. Never consulted by the core switch controller. |
+
+### Handling repeated and concurrent attacks
+
+The switch controller re-evaluates every round independently (no memory of
+"already handled an attack"), so it correctly escalates and de-escalates
+across any number of *sequential* attacks on one device — the training data
+itself contains 18+ separate, randomly-placed attack windows per stream.
+
+For *concurrent, multi-device* attacks, `fleet/` adds a second, independent
+layer: `FleetSimulator` runs N devices through the unmodified single-device
+pipeline, and `FleetCorrelator` looks across devices for both simultaneous
+escalation *and* matching attack-type — timing overlap alone isn't enough,
+since two unrelated devices escalating at the same moment for different
+reasons is a coincidence, not a campaign. See `fleet/benchmark.py` /
+`models/fleet_benchmark_report.json` for real, reproducible numbers.
 
 ## Results (this repo's reproducible run)
 
@@ -90,19 +106,36 @@ flapping between profiles on every noisy score — a deliberate,
 documented precision/stability trade-off, not a bug. See
 `crypto_agility/switch_controller.py`.
 
+### Fleet / attack-type results (`fleet/benchmark.py`)
+
+| Metric | Value |
+|---|---|
+| Attack-type classifier macro F1 (4-way: benign/eavesdrop/jamming/pns) | 0.63 (benign 0.96, jamming 0.74, eavesdrop 0.42, pns 0.40) |
+| Fleet false-alarm rate, independent/unrelated device activity | 0% (0/30 trials, min_devices=3-of-6) |
+| Fleet recall, coordinated campaigns (any true target flagged) | 66.7% at the conservative operating point; 93.3% at a looser threshold (higher false-alarm cost — see `models/fleet_benchmark_report_mindev2.json`) |
+
+The attack-type classifier is a genuinely harder problem than the binary
+detector (4 classes vs. 2, with `pns` deliberately designed to be stealthy)
+and is reported honestly rather than rounded up — it's an additive tagging
+layer, not part of the core security decision.
+
 ## Repository layout
 
 ```
 qsafe-iiot-ad/
 ├── qkd_sim/            # BB84 simulation (Qiskit) + QBER telemetry generator
+│   └── qber_stream_multiclass.py  # attack-type-labeled streams (eavesdrop/jamming/pns)
 ├── ai_detector/         # GRU model, feature engineering, training, INT8 quantization
+│   └── train_attack_type.py       # trains the additive 4-class attack-type classifier
 ├── crypto_agility/      # liboqs KEM backend (BIKE-L1 / HQC-128) + switch controller
 ├── orchestrator/        # End-to-end pipeline + adaptive-vs-static benchmark harness
+│   └── type_runner.py   #   additive attack-type scoring (never used by the switch)
+├── fleet/               # Multi-device simulation + coordinated-campaign correlation
 ├── web/                 # Quantum-themed web dashboard (FastAPI backend + static frontend)
 │   ├── backend/app.py    #   wraps the real project modules — no mocked data
 │   └── frontend/         #   dark quantum-computing / critical-infra themed UI
 ├── firmware_notes/       # ARM Cortex-M4 / TFLite Micro deployment guide
-├── tests/               # pytest unit + integration tests (24 tests)
+├── tests/               # pytest unit + integration tests (53 tests)
 ├── scripts/setup_liboqs.sh  # Builds liboqs (BIKE-L1 + HQC-128 only) from source
 ├── data/                # Generated QBER streams (regenerable, gitignored)
 ├── models/              # Trained model, quantized TFLite, benchmark reports (committed)
@@ -144,7 +177,8 @@ numbers, the FastAPI backend in `web/backend/app.py` directly imports and
 calls `qkd_sim`, `ai_detector`, `crypto_agility`, and `orchestrator`, so
 every chart is either the committed benchmark run or a request-time result
 from a real Qiskit BB84 simulation, the trained GRU, and real `liboqs` KEM
-operations.
+operations. The **Fleet View** section runs several devices at once and
+shows the coordinated-campaign correlator (`fleet/`) live.
 
 ```bash
 pip install -r web/requirements.txt
