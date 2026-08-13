@@ -1,0 +1,245 @@
+{
+  "trials_per_scenario": 15,
+  "n_devices": 6,
+  "n_rounds": 60,
+  "escalate_threshold": 0.86,
+  "correlator_min_devices": 2,
+  "correlator_confidence_threshold": 0.86,
+  "liboqs_available": true,
+  "kem_backend": "LiboqsKEMBackend",
+  "coordinated_campaign": {
+    "recall_any_target_flagged": 0.9333333333333333,
+    "mean_device_precision": 0.7577777777777777,
+    "mean_device_recall": 0.8888888888888888,
+    "n_trials": 15,
+    "trials": [
+      {
+        "attack_type": "eavesdrop",
+        "targets": [
+          "device-01",
+          "device-02",
+          "device-06"
+        ],
+        "flagged": [
+          "device-01",
+          "device-02",
+          "device-05",
+          "device-06"
+        ],
+        "hit": true
+      },
+      {
+        "attack_type": "jamming",
+        "targets": [
+          "device-01",
+          "device-04",
+          "device-05"
+        ],
+        "flagged": [
+          "device-01",
+          "device-04"
+        ],
+        "hit": true
+      },
+      {
+        "attack_type": "pns",
+        "targets": [
+          "device-02",
+          "device-03",
+          "device-06"
+        ],
+        "flagged": [
+          "device-01",
+          "device-02",
+          "device-03",
+          "device-05",
+          "device-06"
+        ],
+        "hit": true
+      },
+      {
+        "attack_type": "eavesdrop",
+        "targets": [
+          "device-01",
+          "device-02",
+          "device-05"
+        ],
+        "flagged": [
+          "device-01",
+          "device-02",
+          "device-05",
+          "device-06"
+        ],
+        "hit": true
+      },
+      {
+        "attack_type": "jamming",
+        "targets": [
+          "device-01",
+          "device-04",
+          "device-06"
+        ],
+        "flagged": [
+          "device-01",
+          "device-03",
+          "device-04",
+          "device-06"
+        ],
+        "hit": true
+      },
+      {
+        "attack_type": "pns",
+        "targets": [
+          "device-04",
+          "device-05",
+          "device-06"
+        ],
+        "flagged": [
+          "device-04",
+          "device-05",
+          "device-06"
+        ],
+        "hit": true
+      },
+      {
+        "attack_type": "eavesdrop",
+        "targets": [
+          "device-02",
+          "device-04",
+          "device-06"
+        ],
+        "flagged": [
+          "device-02",
+          "device-04",
+          "device-06"
+        ],
+        "hit": true
+      },
+      {
+        "attack_type": "jamming",
+        "targets": [
+          "device-03",
+          "device-04",
+          "device-05"
+        ],
+        "flagged": [
+          "device-03",
+          "device-04",
+          "device-05"
+        ],
+        "hit": true
+      },
+      {
+        "attack_type": "pns",
+        "targets": [
+          "device-01",
+          "device-03",
+          "device-04"
+        ],
+        "flagged": [
+          "device-01",
+          "device-03",
+          "device-04",
+          "device-06"
+        ],
+        "hit": true
+      },
+      {
+        "attack_type": "eavesdrop",
+        "targets": [
+          "device-03",
+          "device-05",
+          "device-06"
+        ],
+        "flagged": [
+          "device-02",
+          "device-04"
+        ],
+        "hit": false
+      },
+      {
+        "attack_type": "jamming",
+        "targets": [
+          "device-03",
+          "device-05",
+          "device-06"
+        ],
+        "flagged": [
+          "device-03",
+          "device-05",
+          "device-06"
+        ],
+        "hit": true
+      },
+      {
+        "attack_type": "pns",
+        "targets": [
+          "device-04",
+          "device-05",
+          "device-06"
+        ],
+        "flagged": [
+          "device-03",
+          "device-05",
+          "device-06"
+        ],
+        "hit": true
+      },
+      {
+        "attack_type": "eavesdrop",
+        "targets": [
+          "device-01",
+          "device-03",
+          "device-06"
+        ],
+        "flagged": [
+          "device-01",
+          "device-03",
+          "device-05",
+          "device-06"
+        ],
+        "hit": true
+      },
+      {
+        "attack_type": "jamming",
+        "targets": [
+          "device-04",
+          "device-05",
+          "device-06"
+        ],
+        "flagged": [
+          "device-01",
+          "device-03",
+          "device-04",
+          "device-05",
+          "device-06"
+        ],
+        "hit": true
+      },
+      {
+        "attack_type": "pns",
+        "targets": [
+          "device-01",
+          "device-05",
+          "device-06"
+        ],
+        "flagged": [
+          "device-01",
+          "device-03",
+          "device-05",
+          "device-06"
+        ],
+        "hit": true
+      }
+    ]
+  },
+  "independent_attacks": {
+    "false_alarm_rate": 0.6,
+    "n_trials": 15
+  },
+  "calm": {
+    "false_alarm_rate": 0.13333333333333333,
+    "n_trials": 15
+  },
+  "wall_clock_s": 142.5814950466156
+}

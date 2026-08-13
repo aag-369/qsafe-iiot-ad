@@ -284,6 +284,9 @@ function setupSliders() {
   bind("intensity", "intensity-val", (v) => Number(v).toFixed(2));
   bind("probe-eve", "probe-eve-val", (v) => Number(v).toFixed(2));
   bind("bench-rounds", "bench-rounds-val");
+  bind("fleet-devices", "fleet-devices-val");
+  bind("fleet-rounds", "fleet-rounds-val");
+  bind("fleet-min-devices", "fleet-min-devices-val");
 }
 
 function showInlineError(id, message) {
@@ -501,6 +504,127 @@ async function runLiveBenchmark() {
 }
 
 // ---------------------------------------------------------------------------
+// Fleet View
+// ---------------------------------------------------------------------------
+const TYPE_COLORS = {
+  benign: "#6b7280",
+  eavesdrop: "#a855f7",
+  jamming: "#f59e0b",
+  pns: "#22d3ee",
+};
+
+function setupFleetScenarioToggle() {
+  const scenarioSelect = document.getElementById("fleet-scenario");
+  const campaignField = document.getElementById("fleet-campaign-type-field");
+  const sync = () => {
+    campaignField.style.display = scenarioSelect.value === "coordinated_campaign" ? "" : "none";
+  };
+  scenarioSelect.addEventListener("change", sync);
+  sync();
+}
+
+async function runFleetSimulation() {
+  const btn = document.getElementById("run-fleet-btn");
+  const spinner = btn.querySelector(".btn-spinner");
+  const label = btn.querySelector(".btn-label");
+  btn.disabled = true;
+  spinner.hidden = false;
+  label.textContent = "Simulating fleet…";
+  hideInlineError("fleet-error");
+
+  try {
+    const body = {
+      n_devices: Number(document.getElementById("fleet-devices").value),
+      n_rounds: Number(document.getElementById("fleet-rounds").value),
+      n_qubits_per_round: 32,
+      scenario: document.getElementById("fleet-scenario").value,
+      campaign_attack_type: document.getElementById("fleet-campaign-type").value,
+      campaign_fraction: 0.5,
+      min_devices_for_alert: Number(document.getElementById("fleet-min-devices").value),
+    };
+    const result = await apiPost("/api/simulate/fleet", body);
+    renderFleetResult(result);
+  } catch (e) {
+    console.error(e);
+    showInlineError(
+      "fleet-error",
+      "Fleet simulation failed — the backend may be unreachable or still starting up. " + e.message
+    );
+    await loadHealth();
+  } finally {
+    btn.disabled = false;
+    spinner.hidden = true;
+    label.textContent = "Run Fleet Simulation";
+  }
+}
+
+function renderFleetResult(result) {
+  document.getElementById("fleet-empty-state").style.display = "none";
+
+  const banner = document.getElementById("fleet-alert-banner");
+  const alerts = result.fleet_alerts || [];
+  banner.hidden = false;
+  if (alerts.length === 0) {
+    banner.className = "fleet-alert-banner is-nominal";
+    banner.innerHTML = `<strong>Fleet nominal.</strong> No coordinated campaign detected across ${result.n_devices} devices
+      (requires ${result.min_devices_for_alert}+ devices escalating together on the same attack type).`;
+  } else {
+    banner.className = "fleet-alert-banner";
+    banner.innerHTML = alerts
+      .map(
+        (a) => `<div class="fleet-alert-item">
+          <strong>Coordinated ${a.dominant_attack_type} campaign detected</strong>
+          — rounds ${a.t_start}–${a.t_end}, ${a.peak_device_count} device(s) involved
+          (type agreement ${(a.type_agreement * 100).toFixed(0)}%): ${a.device_ids.join(", ")}
+        </div>`
+      )
+      .join("");
+  }
+
+  const flaggedDevices = new Set(alerts.flatMap((a) => a.device_ids));
+
+  const grid = document.getElementById("fleet-device-grid");
+  grid.innerHTML = "";
+  result.devices.forEach((dev) => {
+    const isEscalated = dev.final_profile === "HQC-128";
+    const isFlagged = flaggedDevices.has(dev.device_id);
+
+    const card = document.createElement("div");
+    card.className = "fleet-device-card";
+    card.classList.toggle("is-escalated", isEscalated);
+    card.classList.toggle("is-flagged", isFlagged);
+
+    const targetBadge = dev.is_campaign_target
+      ? `<span class="fleet-device-badge is-target">campaign target</span>`
+      : "";
+
+    card.innerHTML = `
+      <div class="fleet-device-head">
+        <span class="fleet-device-id">${dev.device_id}</span>
+        ${targetBadge}
+      </div>
+      <div class="fleet-device-stats">
+        <span>profile <b>${dev.final_profile}</b></span>
+        <span>escalations <b>${dev.n_escalations}</b></span>
+        <span>mean QBER <b>${dev.mean_qber.toFixed(4)}</b></span>
+      </div>
+      <div class="fleet-device-timeline"></div>
+    `;
+
+    const timeline = card.querySelector(".fleet-device-timeline");
+    dev.points.forEach((p) => {
+      const tick = document.createElement("div");
+      tick.className = "tick";
+      tick.style.background = p.profile === "HQC-128" ? "#e879f9" : TYPE_COLORS[p.predicted_type] || "#22d3ee";
+      tick.title = `t=${p.t} · ${p.profile} · predicted: ${p.predicted_type} · qber=${p.qber.toFixed(4)}`;
+      timeline.appendChild(tick);
+    });
+
+    grid.appendChild(card);
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Init
 // ---------------------------------------------------------------------------
 function setupMobileNav() {
@@ -528,6 +652,8 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("run-live-btn").addEventListener("click", runLiveSimulation);
   document.getElementById("probe-btn").addEventListener("click", runProbe);
   document.getElementById("run-bench-btn").addEventListener("click", runLiveBenchmark);
+  setupFleetScenarioToggle();
+  document.getElementById("run-fleet-btn").addEventListener("click", runFleetSimulation);
   document.getElementById("retry-connection-btn").addEventListener("click", () => {
     loadHealth();
     loadProjectInfo();

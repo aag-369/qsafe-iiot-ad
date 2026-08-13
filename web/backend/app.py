@@ -34,10 +34,14 @@ sys.path.insert(0, str(REPO_ROOT))
 from ai_detector.features import WindowConfig, build_windows, normalize_features  # noqa: E402
 from crypto_agility.kem_backend import KEMProfile, get_kem_backend, is_liboqs_available  # noqa: E402
 from crypto_agility.switch_controller import SwitchController  # noqa: E402
+from fleet.correlator import FleetCorrelator, FleetCorrelatorConfig  # noqa: E402
+from fleet.simulator import FleetConfig, FleetSimulator, VALID_SCENARIOS  # noqa: E402
 from orchestrator.detector_runner import DetectorRunner  # noqa: E402
 from orchestrator.pipeline import logs_to_dataframe, run_adaptive, run_static_profile  # noqa: E402
+from orchestrator.type_runner import AttackTypeRunner  # noqa: E402
 from qkd_sim.bb84 import simulate_bb84_round  # noqa: E402
 from qkd_sim.qber_stream import QBERStreamGenerator, StreamConfig  # noqa: E402
+from qkd_sim.qber_stream_multiclass import ATTACK_TYPE_NAMES, AttackType  # noqa: E402
 
 MODELS_DIR = REPO_ROOT / "models"
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
@@ -66,6 +70,7 @@ app.add_middleware(
 # that any slowness or fallback is visible in the server logs immediately
 # instead of silently stalling someone's first click in the browser.
 _detector_runner: DetectorRunner | None = None
+_type_runner: AttackTypeRunner | None = None
 _kem_backend = None
 _threshold_cache: float | None = None
 
@@ -79,6 +84,17 @@ def get_detector() -> DetectorRunner:
             window_size=20,
         )
     return _detector_runner
+
+
+def get_type_runner() -> AttackTypeRunner:
+    global _type_runner
+    if _type_runner is None:
+        _type_runner = AttackTypeRunner(
+            model_path=str(MODELS_DIR / "attack_type_gru.keras"),
+            norm_stats_path=str(MODELS_DIR / "attack_type_norm_stats.json"),
+            window_size=20,
+        )
+    return _type_runner
 
 
 def get_cached_kem_backend():
@@ -116,6 +132,18 @@ def _warm_up() -> None:
         get_detector()
         print("[q-safe-iiot-ad] detector model loaded OK.")
 
+    type_missing = [
+        p.name
+        for p in [MODELS_DIR / "attack_type_gru.keras", MODELS_DIR / "attack_type_norm_stats.json"]
+        if not p.exists()
+    ]
+    if type_missing:
+        print(f"[q-safe-iiot-ad] WARNING: missing attack-type classifier artifacts: {type_missing}. "
+              f"Fleet View will be unavailable until `python -m ai_detector.train_attack_type` is run.")
+    else:
+        get_type_runner()
+        print("[q-safe-iiot-ad] attack-type classifier loaded OK.")
+
     backend = get_cached_kem_backend()
     print(f"[q-safe-iiot-ad] KEM backend resolved: {type(backend).__name__} "
           f"(liboqs_available={is_liboqs_available()}).")
@@ -148,6 +176,17 @@ class BenchmarkRequest(BaseModel):
     seed: int | None = None
 
 
+class FleetSimRequest(BaseModel):
+    n_devices: int = Field(6, ge=2, le=12)
+    n_rounds: int = Field(60, ge=20, le=150)
+    n_qubits_per_round: int = Field(32, ge=16, le=64)
+    scenario: str = Field("coordinated_campaign", description=f"one of {VALID_SCENARIOS}")
+    campaign_attack_type: str = Field("eavesdrop", description="eavesdrop | jamming | pns")
+    campaign_fraction: float = Field(0.5, ge=0.1, le=1.0)
+    min_devices_for_alert: int = Field(3, ge=2, le=12)
+    seed: int | None = None
+
+
 # --- Static content -----------------------------------------------------------
 PROJECT_INFO = {
     "title": "Q-Safe IIoT-AD",
@@ -158,13 +197,16 @@ PROJECT_INFO = {
         "Computer exists. Q-Safe IIoT-AD watches the physical-layer QKD channel (QBER) with a lightweight "
         "quantized GRU, and only escalates from a low-overhead BIKE-L1 profile to a hardened HQC-128 "
         "profile when there is real evidence of interception — including stealthy 'Harvest Now, Decrypt "
-        "Later' reconnaissance."
+        "Later' reconnaissance. A second, additive classifier tags each detected episode with an "
+        "attack type (eavesdrop / jamming / PNS-style), and a fleet correlator watches multiple devices "
+        "at once, distinguishing a coordinated, multi-device campaign from ordinary, unrelated per-device noise."
     ),
     "keywords": [
         "Post-Quantum Cryptography", "Industrial IoT Security", "Crypto-Agility",
         "Quantum Key Distribution", "BB84 Protocol", "QBER Anomaly Detection",
         "Gated Recurrent Unit", "BIKE", "HQC", "ARM Cortex-M4",
         "Harvest Now Decrypt Later", "Critical Infrastructure Protection",
+        "Fleet Correlation", "Attack-Type Classification",
     ],
     "pipeline": [
         {
@@ -369,6 +411,98 @@ def benchmark_run(req: BenchmarkRequest):
         "rounds_on_hqc128": int((adaptive_df["profile"] == KEMProfile.HQC_128.value).sum()),
         "wall_clock_adaptive_s": adaptive_elapsed,
         "wall_clock_static_s": static_elapsed,
+    }
+
+
+_ATTACK_TYPE_BY_NAME = {v: k for k, v in ATTACK_TYPE_NAMES.items()}
+
+
+@app.post("/api/simulate/fleet")
+def simulate_fleet(req: FleetSimRequest):
+    """Runs several simulated devices side by side through the exact same
+    real pipeline used by /api/simulate/live (BB84 -> binary GRU detector ->
+    switch controller -> real liboqs KEM ops), tags each device's rounds
+    with the additive attack-type classifier, and correlates across devices
+    to distinguish a coordinated, fleet-wide campaign from unrelated,
+    independent per-device noise. See fleet/simulator.py and
+    fleet/correlator.py."""
+    if req.scenario not in VALID_SCENARIOS:
+        raise HTTPException(status_code=400, detail=f"scenario must be one of {VALID_SCENARIOS}")
+    if req.campaign_attack_type not in _ATTACK_TYPE_BY_NAME or req.campaign_attack_type == "benign":
+        raise HTTPException(status_code=400, detail="campaign_attack_type must be one of eavesdrop | jamming | pns")
+
+    seed = req.seed if req.seed is not None else int(time.time() * 1000) % (2**31)
+    threshold = _load_threshold()
+
+    detector = get_detector()
+    type_runner = get_type_runner()
+    backend = get_cached_kem_backend()
+    correlator = FleetCorrelator(
+        FleetCorrelatorConfig(min_devices=req.min_devices_for_alert, confidence_threshold=threshold)
+    )
+    sim = FleetSimulator(detector, type_runner, backend, correlator)
+
+    cfg = FleetConfig(
+        n_devices=req.n_devices,
+        n_rounds=req.n_rounds,
+        n_qubits_per_round=req.n_qubits_per_round,
+        scenario=req.scenario,
+        campaign_attack_type=_ATTACK_TYPE_BY_NAME[req.campaign_attack_type],
+        campaign_fraction=req.campaign_fraction,
+        escalate_threshold=threshold,
+        de_escalate_threshold=max(0.05, threshold - 0.36),
+        cooldown_rounds=4,
+        seed=seed,
+    )
+    result = sim.run(cfg)
+
+    devices_payload = []
+    for dev in result.devices:
+        points = []
+        for row, conf, ptype in zip(dev.df.itertuples(), dev.confidence, dev.predicted_type):
+            profile_row = dev.pipeline_df.iloc[int(row.t)]
+            points.append(
+                {
+                    "t": int(row.t),
+                    "qber": float(row.qber),
+                    "confidence": float(conf),
+                    "predicted_type": ATTACK_TYPE_NAMES[AttackType(int(ptype))],
+                    "profile": str(profile_row["profile"]),
+                }
+            )
+        devices_payload.append(
+            {
+                "device_id": dev.device_id,
+                "is_campaign_target": dev.is_campaign_target,
+                "final_profile": str(dev.pipeline_df.iloc[-1]["profile"]),
+                "n_escalations": int(dev.pipeline_df["escalated"].sum()),
+                "mean_qber": float(dev.df["qber"].mean()),
+                "points": points,
+            }
+        )
+
+    alerts_payload = [
+        {
+            "t_start": a.t_start,
+            "t_end": a.t_end,
+            "device_ids": a.device_ids,
+            "peak_device_count": int(a.peak_device_count),
+            "dominant_attack_type": a.dominant_attack_type,
+            "type_agreement": a.type_agreement,
+        }
+        for a in result.correlator_result.alerts
+    ]
+
+    return {
+        "seed": seed,
+        "scenario": req.scenario,
+        "n_devices": req.n_devices,
+        "n_rounds": req.n_rounds,
+        "threshold": threshold,
+        "min_devices_for_alert": req.min_devices_for_alert,
+        "wall_clock_s": result.wall_clock_s,
+        "devices": devices_payload,
+        "fleet_alerts": alerts_payload,
     }
 
 

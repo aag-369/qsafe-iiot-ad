@@ -58,6 +58,37 @@ def test_live_simulation_small():
     assert all(p["profile"] in ("BIKE-L1", "HQC-128") for p in body["points"])
 
 
+def test_fleet_simulation_small():
+    r = client.post(
+        "/api/simulate/fleet",
+        json={
+            "n_devices": 4,
+            "n_rounds": 30,
+            "n_qubits_per_round": 16,
+            "scenario": "coordinated_campaign",
+            "campaign_attack_type": "jamming",
+            "campaign_fraction": 0.5,
+            "min_devices_for_alert": 2,
+            "seed": 5,
+        },
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert len(body["devices"]) == 4
+    assert sum(d["is_campaign_target"] for d in body["devices"]) == 2
+    for dev in body["devices"]:
+        assert len(dev["points"]) == 30
+    assert "fleet_alerts" in body
+
+
+def test_fleet_simulation_rejects_bad_scenario():
+    r = client.post(
+        "/api/simulate/fleet",
+        json={"n_devices": 3, "n_rounds": 25, "scenario": "not-a-scenario"},
+    )
+    assert r.status_code == 400
+
+
 def test_frontend_served():
     r = client.get("/")
     assert r.status_code == 200

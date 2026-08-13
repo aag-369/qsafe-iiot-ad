@@ -28,23 +28,40 @@ def _engineer_features(df: pd.DataFrame, rolling_window: int) -> pd.DataFrame:
     df["qber_rolling_std"] = (
         df["qber"].rolling(window=rolling_window, min_periods=1).std().fillna(0.0)
     )
+    # Causal rolling mean — gives the model direct access to the local
+    # central tendency, not just instantaneous QBER. Per-round QBER is noisy
+    # enough that different attack *types* mostly separate by their window
+    # average rather than any single sample, so the attack-type classifier
+    # (which uses this feature; the binary detector does not, by default)
+    # leans on it heavily to tell e.g. jamming from eavesdropping.
+    df["qber_rolling_mean"] = (
+        df["qber"].rolling(window=rolling_window, min_periods=1).mean()
+    )
     return df
 
 
 def build_windows(
     df: pd.DataFrame,
     config: WindowConfig | None = None,
+    label_col: str = "label",
 ) -> tuple[np.ndarray, np.ndarray]:
     """Builds (X, y) arrays of shape (n_windows, window_size, n_features) and
-    (n_windows,). The label for each window is the ground-truth attack label
-    at the *final* timestep of the window (i.e. "is an intrusion in progress
-    right now, given the recent QBER history").
+    (n_windows,). The label for each window is the ground-truth label at the
+    *final* timestep of the window (i.e. "what's happening right now, given
+    the recent QBER history").
+
+    `label_col` defaults to "label" (the binary 0/1 intrusion column used by
+    the core detector). Pass `label_col="attack_type"` against a stream from
+    `qkd_sim.qber_stream_multiclass` to build integer class-index labels for
+    the attack-type classifier instead — the binary "label" column stays
+    untouched either way, so the same generated stream can feed both models.
     """
     config = config or WindowConfig()
     df = _engineer_features(df, config.rolling_window)
 
     feat_matrix = df[list(config.features)].to_numpy(dtype=np.float32)
-    labels = df["label"].to_numpy(dtype=np.float32)
+    label_dtype = np.float32 if label_col == "label" else np.int64
+    labels = df[label_col].to_numpy(dtype=label_dtype)
 
     n = len(df)
     windows = []
@@ -55,7 +72,7 @@ def build_windows(
         window_labels.append(labels[end - 1])
 
     X = np.stack(windows).astype(np.float32)
-    y = np.array(window_labels, dtype=np.float32)
+    y = np.array(window_labels, dtype=label_dtype)
     return X, y
 
 

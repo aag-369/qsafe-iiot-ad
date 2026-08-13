@@ -36,6 +36,7 @@
       <a href="#overview">Overview</a>
       <a href="#architecture">Architecture</a>
       <a href="#demo">Live Demo</a>
+      <a href="#fleet">Fleet View</a>
       <a href="#benchmarks">Benchmarks</a>
       <a href="#deploy">Deploy</a>
       <a href="#about">About</a>
@@ -172,6 +173,66 @@
             </div>
           </div>
           <div id="demo-empty-state" class="empty-state">Run a live simulation to see real BB84 → GRU → crypto-switch output here.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FLEET VIEW -->
+  <section id="fleet" class="section section-alt">
+    <div class="section-inner">
+      <div class="section-kicker">Fleet View</div>
+      <h2>One device escalating is normal. Several, in sync, isn't.</h2>
+      <p class="lede">
+        Runs several devices side by side through the exact same real pipeline, tags each round with
+        an attack-<em>type</em> classifier (eavesdrop / jamming / pns), and correlates across devices —
+        distinguishing a coordinated, fleet-wide campaign from ordinary, unrelated per-device noise.
+      </p>
+
+      <div class="demo-grid">
+        <div class="panel controls-panel">
+          <h3>Fleet controls</h3>
+
+          <label class="field">
+            <span>Devices <b id="fleet-devices-val">6</b></span>
+            <input type="range" id="fleet-devices" min="4" max="10" value="6" step="1">
+          </label>
+          <label class="field">
+            <span>Rounds <b id="fleet-rounds-val">60</b></span>
+            <input type="range" id="fleet-rounds" min="30" max="120" value="60" step="10">
+          </label>
+          <label class="field">
+            <span>Scenario</span>
+            <select id="fleet-scenario" class="select-field">
+              <option value="coordinated_campaign" selected>Coordinated campaign</option>
+              <option value="independent_attacks">Independent, unrelated attacks</option>
+              <option value="calm">Calm (no attacks)</option>
+            </select>
+          </label>
+          <label class="field" id="fleet-campaign-type-field">
+            <span>Campaign attack type</span>
+            <select id="fleet-campaign-type" class="select-field">
+              <option value="eavesdrop" selected>Eavesdrop (intercept-resend)</option>
+              <option value="jamming">Jamming (channel disruption)</option>
+              <option value="pns">PNS-style (stealthy)</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Min. devices to alert <b id="fleet-min-devices-val">3</b></span>
+            <input type="range" id="fleet-min-devices" min="2" max="8" value="3" step="1">
+          </label>
+
+          <button id="run-fleet-btn" class="btn btn-primary btn-block">
+            <span class="btn-label">Run Fleet Simulation</span>
+            <span class="btn-spinner" hidden></span>
+          </button>
+        </div>
+
+        <div class="panel results-panel">
+          <div id="fleet-error" class="inline-error" hidden></div>
+          <div id="fleet-alert-banner" class="fleet-alert-banner" hidden></div>
+          <div id="fleet-device-grid" class="fleet-device-grid"></div>
+          <div id="fleet-empty-state" class="empty-state">Run a fleet simulation to see per-device status and cross-device correlation here.</div>
         </div>
       </div>
     </div>
