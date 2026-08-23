@@ -105,25 +105,47 @@ def main() -> int:
         check("detector loaded", OK, f"{det.backend}, threshold {det.threshold:.2f}, "
                                     f"{load_ms:.0f} ms to load")
 
+        # Does streaming inference still reach the same decisions as the batch
+        # pipeline that produced the published numbers? This is the single most
+        # important thing to know before presenting, so it runs against a
+        # deterministic synthetic series when the (gitignored) held-out stream
+        # is not on this machine, rather than being skipped.
+        import numpy as np
+
+        from orchestrator.detector_runner import DetectorRunner
+
         test_csv = REPO_ROOT / "data" / "qber_test.csv"
         if test_csv.exists():
-            from orchestrator.detector_runner import DetectorRunner
-            df = pd.read_csv(test_csv).head(200)
-            batch = DetectorRunner(
-                model_path=str(models / "gru_detector.keras"),
-                norm_stats_path=str(models / "norm_stats.json"),
-            ).score_stream(df)
-            tail, live = [], []
-            for q in df["qber"]:
-                tail.append(q)
-                live.append(det.score_tail(tail))
-            import numpy as np
-            m = np.arange(len(df)) >= 19
-            agree = ((np.array(live)[m] >= det.threshold) == (batch[m] >= det.threshold)).mean()
-            check("live detector vs batch pipeline", OK if agree >= 0.99 else FAIL,
-                  f"{agree*100:.1f}% decision agreement over 200 rounds")
+            qber = pd.read_csv(test_csv).head(200)["qber"].to_numpy()
+            source = "held-out BB84 stream"
         else:
-            check("live detector vs batch pipeline", WARN, "data/qber_test.csv not present")
+            rng = np.random.default_rng(7)
+            qber = rng.normal(0.015, 0.022, 220)
+            for start, length, level in ((60, 40, 0.16), (150, 30, 0.05)):
+                qber[start:start + length] = rng.normal(level, level * 0.35, length)
+            qber = np.clip(qber, 0.0, 1.0)
+            source = "synthetic series (data/qber_test.csv not present)"
+
+        df = pd.DataFrame({"qber": qber, "label": 0})
+        batch = DetectorRunner(
+            model_path=str(models / "gru_detector.keras"),
+            norm_stats_path=str(models / "norm_stats.json"),
+        ).score_stream(df)
+        tail, live = [], []
+        for q in qber:
+            tail.append(float(q))
+            live.append(det.score_tail(tail))
+
+        live = np.array(live)
+        m = np.arange(len(df)) >= det.window_size - 1
+        agree = ((live[m] >= det.threshold) == (batch[m] >= det.threshold)).mean()
+        max_dev = float(np.abs(live[m] - batch[m]).max())
+        check(
+            "live detector vs batch pipeline",
+            OK if (agree >= 0.98 and max_dev < 0.01) else FAIL,
+            f"{agree*100:.1f}% decision agreement, max deviation {max_dev:.4f} "
+            f"({len(qber)} rounds, {source})",
+        )
 
         with open(models / "train_metrics.json") as f:
             tm = json.load(f)
