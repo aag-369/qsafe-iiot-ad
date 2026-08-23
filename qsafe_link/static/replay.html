@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Q-Safe · Session Replay</title><link rel="icon" href="data:,">
+<link rel="stylesheet" href="__BASE__/static/shared.css">
+<script>window.QSAFE_BASE = "__BASE__";</script>
+<style>body{padding:24px;max-width:900px;margin:0 auto}</style></head>
+<body>
+<h1 style="font-size:22px;margin-bottom:8px">Session replay</h1>
+<div class="muted" style="font-size:13px;line-height:1.6">
+  Load a <span class="mono">demo_session.json</span> exported by
+  <span class="mono">python -m demo.record_demo</span> to replay a recorded run
+  with no gateway running. A standalone copy of this page is written into
+  <span class="mono">demo_output/</span> alongside each recording.
+</div>
+<div class="card" style="margin-top:16px"><input type="file" id="f" accept="application/json"></div>
+<div id="out" style="margin-top:16px"></div>
+<script type="module">
+document.getElementById('f').addEventListener('change', async (e) => {
+  const file = e.target.files[0]; if (!file) return;
+  const data = JSON.parse(await file.text());
+  const rounds = data.events.filter(x => x.kind === 'round').length;
+  const rekeys = data.events.filter(x => x.kind === 'rekey');
+  document.getElementById('out').innerHTML = `<div class="card">
+    <div class="card-title">Recorded session</div>
+    <div style="font-size:13px;line-height:1.7">
+      ${data.events.length.toLocaleString()} events · ${rounds.toLocaleString()} rounds ·
+      ${rekeys.length} rekeys<br>
+      KEM backend: <b>${data.backend?.kem_backend}</b> · detector: <b>${data.backend?.detector_backend}</b>
+    </div></div>`;
+});
+</script>
+</body></html>

@@ -36,6 +36,7 @@
       <a href="#overview">Overview</a>
       <a href="#architecture">Architecture</a>
       <a href="#demo">Live Demo</a>
+      <a href="#field-link">Field Link</a>
       <a href="#fleet">Fleet View</a>
       <a href="#benchmarks">Benchmarks</a>
       <a href="#deploy">Deploy</a>
@@ -61,7 +62,8 @@
         Industrial IoT infrastructures — watching the quantum channel, gating the crypto cost.
       </p>
       <div class="hero-cta">
-        <a href="#demo" class="btn btn-primary">Launch Live Simulation</a>
+        <a href="/link/console" class="btn btn-primary">Open the Field Link demo</a>
+        <a href="#demo" class="btn btn-ghost">Launch Live Simulation</a>
         <a href="#benchmarks" class="btn btn-ghost">View Benchmarks</a>
       </div>
       <div class="hero-stats" id="hero-stats">
@@ -179,6 +181,42 @@
   </section>
 
   <!-- FLEET VIEW -->
+  <!-- Q-Safe Field Link: the live device-to-device demonstration. A separate
+       application mounted at /link, so these are real links, not anchors. -->
+  <section id="field-link" class="section">
+    <div class="section-inner">
+      <div class="section-kicker">Field Link</div>
+      <h2>The same pipeline, protecting a link between real devices.</h2>
+      <p class="lede">
+        Everything above runs the framework against generated telemetry. The
+        Field Link runs it against two phones. A phone becomes an industrial
+        edge node and streams real sensor data across a link secured by
+        BIKE-L1 or HQC-128; a second phone or a smartwatch receives and
+        decrypts it. When the quantum channel shows evidence of interception,
+        the link re-keys under the hardened profile mid-conversation — and the
+        session key visibly changes on both screens, because a real KEM
+        handshake just ran.
+      </p>
+      <p class="lede">
+        The adversary controls set <code>eve_intercept_prob</code> on the
+        actual BB84 simulation. The QBER rises because of simulated quantum
+        mechanics, not because a number was typed into a chart.
+      </p>
+      <div class="hero-cta" style="margin-top:1.5rem">
+        <a href="/link/console" class="btn btn-primary">Operator console</a>
+        <a href="/link/" class="btn btn-ghost">Join from a phone (QR)</a>
+        <a href="/link/node" class="btn btn-ghost">Field sensor</a>
+        <a href="/link/monitor" class="btn btn-ghost">Control room</a>
+      </div>
+      <p class="lede" style="margin-top:1rem;font-size:0.85rem;opacity:0.72">
+        On a free hosting tier the demo starts with no devices and pauses when
+        nobody is connected — press &ldquo;Start a demonstration&rdquo; on the
+        console. It runs slower there than on a laptop, because each BB84 round
+        is real work.
+      </p>
+    </div>
+  </section>
+
   <section id="fleet" class="section section-alt">
     <div class="section-inner">
       <div class="section-kicker">Fleet View</div>

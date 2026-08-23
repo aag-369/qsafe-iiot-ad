@@ -1,17 +1,26 @@
-# Render.com deployment blueprint for the Q-Safe IIoT-AD web dashboard.
+# Render.com deployment blueprint for Q-Safe IIoT-AD.
+#
+# One service serves both surfaces:
+#   /              the research dashboard  (web/backend/app.py)
+#   /link/console  the Q-Safe Field Link live demo  (qsafe_link/)
 #
 # Usage:
-#   1. Push this repo to GitHub (see README "Publishing to your GitHub account").
+#   1. Push this repo to GitHub.
 #   2. In the Render dashboard: New + -> Blueprint -> connect this repo.
 #   3. Render reads this file automatically and provisions the service below.
 #   4. First build takes several minutes (TensorFlow + building liboqs from
 #      source) — subsequent deploys reuse Docker layer caching and are faster.
 #
-# Free-tier services on Render sleep after 15 minutes of inactivity and take
-# ~30-60s to wake on the next request (the liboqs/model warm-up in
-# web/backend/app.py's startup handler runs during that wake, so the first
-# request after a sleep will be slower than subsequent ones). Upgrade the
-# plan below to keep it always-on.
+# Free-tier services sleep after 15 minutes of inactivity and take ~30-60s to
+# wake on the next request. Upgrade the plan below to keep it always-on.
+#
+# About the demo on a free instance: the Field Link control loop executes real
+# Qiskit circuits continuously, so it starts with **no devices** here and
+# pauses whenever no browser is connected (QSAFE_LINK_IDLE_PAUSE_S). A visitor
+# presses "Start a demonstration" on the console to bring devices up. Expect it
+# to run slower than on a laptop — a free instance gets a fraction of a CPU,
+# and a BB84 round under attack is real work. The booth demo should run
+# locally; this deployment is for sharing a link.
 
 services:
   - type: web
@@ -24,3 +33,33 @@ services:
     envVars:
       - key: TF_CPP_MIN_LOG_LEVEL
         value: "3"
+
+      # --- Field Link demo ---------------------------------------------
+      # Mount prefix for the demo. "" would collide with the dashboard.
+      - key: QSAFE_LINK_MOUNT
+        value: "/link"
+      # Set to 0 to deploy the dashboard alone.
+      - key: QSAFE_LINK_ENABLED
+        value: "1"
+      # Devices to pre-create at boot. 0 means an unattended instance runs no
+      # quantum simulation at all until a visitor asks for a demonstration.
+      - key: QSAFE_LINK_DEVICES
+        value: "0"
+      # QKD rounds per second per device. Lower than the local default of 3
+      # because a free instance has far less CPU.
+      - key: QSAFE_LINK_RATE
+        value: "2"
+      # Qubits per BB84 round. 64 matches the stream the detector was trained
+      # on; lowering it widens the benign QBER distribution and raises the
+      # false-escalation rate (see demo/ARCHITECTURE_MAPPING.md section 6).
+      - key: QSAFE_LINK_QUBITS
+        value: "64"
+      # Pause the control loop this many seconds after the last browser
+      # disconnects. 0 disables the pause.
+      - key: QSAFE_LINK_IDLE_PAUSE_S
+        value: "120"
+      # The attack-type classifier is a float Keras model and the single
+      # largest memory item in the demo. Set to 0 if the instance runs tight
+      # on RAM; the core escalate/de-escalate path does not use it.
+      - key: QSAFE_LINK_TYPE_TAGGER
+        value: "1"

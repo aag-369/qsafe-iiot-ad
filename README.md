@@ -65,6 +65,8 @@ flowchart LR
 | Detection | `ai_detector/` | A 2-layer GRU (trained with `tf.keras`) classifies each round as benign channel noise vs. active interception; quantized to TFLite for embedded deployment. |
 | Crypto-agility | `crypto_agility/` | Wraps real `liboqs` KEM operations for BIKE-L1 and HQC-128, with a hysteresis-based switch controller driven by the detector's confidence score. |
 | Orchestration | `orchestrator/` | Runs the full pipeline round-by-round and benchmarks the AI-gated adaptive scheme against a static always-on-HQC-128 baseline. |
+| Protected link | `secure_channel/` | Turns the KEM shared secret into a working AES-256-GCM session (HKDF-SHA256 key schedule, replay window, directional keys) and re-keys it live on every profile switch. The published pipeline measures handshakes but discards the secret; this is what makes the switch protect actual traffic. |
+| Live demo | `qsafe_link/` | Runs the whole per-node loop in real time against phones over Wi-Fi — see [Q-Safe Field Link](#q-safe-field-link-live-device-to-device-demo). |
 | Fleet correlation | `fleet/` | Additive: runs several devices through the same pipeline in parallel, tags each round with an attack-*type* classifier (eavesdrop/jamming/pns), and flags a coordinated multi-device campaign only when devices escalate *and* agree on attack type at the same time. Never consulted by the core switch controller. |
 
 ### Handling repeated and concurrent attacks
@@ -131,6 +133,14 @@ qsafe-iiot-ad/
 ├── orchestrator/        # End-to-end pipeline + adaptive-vs-static benchmark harness
 │   └── type_runner.py   #   additive attack-type scoring (never used by the switch)
 ├── fleet/               # Multi-device simulation + coordinated-campaign correlation
+├── secure_channel/      # KEM shared secret -> HKDF -> AES-256-GCM session, re-keyed on switch
+├── qsafe_link/          # Q-Safe Field Link: the live device-to-device demo
+│   ├── channel.py       #   live BB84 channel per device (adversary controls drive it)
+│   ├── node.py          #   the per-node control loop, closed in real time
+│   ├── gateway.py       #   FastAPI + WebSocket broker
+│   └── static/          #   phone, smartwatch and projector clients
+├── demo/                # Preflight check, scripted recording, runbook, evidence pack
+├── server.py            # Unified entrypoint: dashboard at / , demo at /link
 ├── web/                 # Quantum-themed web dashboard (FastAPI backend + static frontend)
 │   ├── backend/app.py    #   wraps the real project modules — no mocked data
 │   └── frontend/         #   dark quantum-computing / critical-infra themed UI
@@ -181,11 +191,17 @@ operations. The **Fleet View** section runs several devices at once and
 shows the coordinated-campaign correlator (`fleet/`) live.
 
 ```bash
-pip install -r web/requirements.txt
+pip install -r web/requirements.txt -r demo/requirements.txt
 bash scripts/setup_liboqs.sh   # skip if already built (see above)
-uvicorn web.backend.app:app --reload --port 8000
-# open http://localhost:8000
+uvicorn server:app --reload --port 8000
+# http://localhost:8000            -> research dashboard
+# http://localhost:8000/link/console -> Q-Safe Field Link live demo
 ```
+
+`server.py` mounts both applications in one process: the dashboard at `/` and
+the Field Link demo at `/link`. Serving the dashboard alone still works
+(`uvicorn web.backend.app:app`), and `QSAFE_LINK_ENABLED=0` disables the demo
+on the combined entrypoint.
 
 Or with Docker (build from the repo root):
 
@@ -224,11 +240,22 @@ includes a ready-made [Render](https://render.com) blueprint
 3. Render reads `render.yaml` automatically and provisions one Docker web
    service (`qsafe-iiot-ad`) built from `web/Dockerfile`, with a health
    check on `/api/health`. Click **Apply** / **Deploy**.
+   The service serves the dashboard at `/` and the Field Link demo at
+   `/link/console` — one instance, one URL, because a free tier gives you one
+   web service.
 4. First build takes several minutes (installing TensorFlow and building
    `liboqs` from source inside the container) — watch the build log in the
    Render dashboard. Once it says "Live", your public URL is
    `https://qsafe-iiot-ad-<random-suffix>.onrender.com` (Render shows the
    exact URL at the top of the service page).
+
+On a free instance the Field Link demo starts with **no devices** and pauses
+its control loop whenever no browser is connected, so an unattended instance
+is not executing quantum circuits for nobody; a visitor presses "Start a
+demonstration" on the console to bring devices up. Expect it to run slower
+than on a laptop — a free instance gets a fraction of a CPU and a BB84 round
+is real work. Run the booth demo locally; deploy for sharing a link. Every
+knob is an environment variable in `render.yaml`.
 
 Free-tier services sleep after 15 minutes idle and take ~30-60s to wake on
 the next visit (the model/liboqs warm-up in `web/backend/app.py` runs
@@ -252,6 +279,67 @@ What's on the page:
 - **Benchmarks** — the committed F1/precision/recall/AUC and KEM-latency-reduction numbers as charts, plus a "run live benchmark" button that executes real liboqs BIKE-L1/HQC-128 handshakes for a fresh stream on demand.
 - **Deploy** — Docker/local run instructions and the tech stack.
 
+## Q-Safe Field Link — live device-to-device demo
+
+Everything else in this repository runs the framework against generated
+telemetry. `qsafe_link/` runs it against **real devices**: a phone becomes an
+industrial edge node and streams live sensor data across a link protected by
+BIKE-L1 or HQC-128, a second phone or a smartwatch receives and decrypts it,
+and a projector view shows the quantum channel, the detector, and every
+profile switch as it happens.
+
+```
+Phone A (browser)        ═══ Q-Safe protected link ═══>        Watch / Phone B
+"field sensor"      BIKE-L1 / HQC-128 + AES-256-GCM         "control room"
+ real sensor data        re-keyed on every gate flip           live gauge + alarm
+        \                          |                                  /
+         \______________  Operator console (projector)  _____________/
+              QBER · GRU confidence · profile timeline · rekeys · CPU saved
+```
+
+```bash
+python -m demo.preflight              # 25 checks before you present
+python -m qsafe_link.run --devices 3  # prints the URLs phones should open
+```
+
+Then open `/console` on a laptop, `/node` on one phone, `/monitor` on another
+(`?compact=1` on a smartwatch). `/` shows QR codes so people can join by
+camera. No internet is required — a laptop hotspot is enough.
+
+**The adversary controls are not cosmetic.** Each scenario sets
+`eve_intercept_prob` / `channel_error_prob` on the *actual*
+`simulate_bb84_round` call for that device. QBER rises because of simulated
+quantum mechanics, and the detector sees genuinely unseen telemetry.
+
+Two properties worth knowing:
+
+- The demo runs the **INT8 TFLite** detector — the 80.6 KB artifact targeted at
+  the Cortex-M4 — not the float training model. Measured at 0.02 ms per window
+  versus 60 ms for a single-window Keras call, with 100% decision agreement
+  against `orchestrator/detector_runner.py` over a 200-round replay.
+- Rounds default to **64 qubits**, matching the training stream. Fewer qubits
+  shorten the sifted key, so one bit error moves QBER further and spurious
+  escalations rise sharply — 0.07% of rounds at 64, 5.0% at 32.
+
+| Read | For |
+|---|---|
+| [`demo/RUNBOOK.md`](demo/RUNBOOK.md) | Setup, the five-minute demo script, prepared answers to hard questions, troubleshooting |
+| [`demo/ARCHITECTURE_MAPPING.md`](demo/ARCHITECTURE_MAPPING.md) | Every demo component mapped to the paper's Fig. 1, and exactly what is real vs. simulated |
+
+### Offline evidence pack
+
+```bash
+python -m demo.record_demo --devices 4
+```
+
+Writes `demo_output/`: a `demo_replay.html` that opens with **no server and no
+network** (the fallback for when venue Wi-Fi fails), a `demo_report.json` with
+measured detection latencies and the real rekey log, and publication-quality
+figures. A recorded run on the development machine: 8 attack episodes, median
+detection **0.199 s**, HQC-128 handshakes at 9.97 ms against BIKE-L1 at
+0.91 ms, 76% of rounds on the baseline profile, and **69.9% CPU saved** under
+the paper's own methodology.
+
 ## Reproducing the results
 
 ```bash
@@ -272,6 +360,15 @@ python -m orchestrator.benchmark --stream data/qber_test.csv
 Each step writes its artifacts to `data/` and `models/` and prints a
 summary; `models/benchmark_report.json` is the final headline-numbers file.
 
+```bash
+# Sanity gate — run this after any change to the KEM layer.
+python scripts/verify_kem_ordering.py
+```
+
+The adaptive-gating claim inverts if the baseline profile is ever more
+expensive than the hardened one, so this check runs in CI and at Docker build
+time rather than being left to a test buried in the suite.
+
 ## Design notes and honesty about what's simulated
 
 - **BB84 physics is real**, not mocked: `qkd_sim/bb84.py` builds actual
@@ -288,6 +385,17 @@ summary; `models/benchmark_report.json` is the final headline-numbers file.
   `scripts/setup_liboqs.sh`) and only falls back to a clearly-labeled
   (`simulated=True`) timing-accurate stand-in if liboqs isn't built in the
   current environment (e.g. a restrictive CI runner).
+- **The protected link is real**: `secure_channel/` derives an AES-256-GCM
+  session key from the KEM shared secret via HKDF-SHA256 and re-keys on every
+  profile switch, so the ciphertext shown in the demo is the ciphertext that
+  crossed the link. Replay, tampering, cross-direction replay and post-rekey
+  frames are all rejected, with tests for each.
+- **The phone is not the PQC endpoint, and the demo does not pretend it is**:
+  there is no browser-side BIKE-L1 (only HQC-128 exists in WASM, via PQClean),
+  so the phone is the node's sensor and HMI over the LAN and the
+  PQC-protected hop is node ↔ gateway. That is how an industrial gateway
+  actually terminates crypto for field devices, and the boundary is stated in
+  `demo/ARCHITECTURE_MAPPING.md` § 3 rather than glossed over.
 - **What is *not* real**: this does not run on physical QKD hardware or an
   actual Cortex-M4 chip. The CPU-latency figures are host-measured (this
   development machine); see `firmware_notes/CORTEX_M4_DEPLOYMENT.md` for

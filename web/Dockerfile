@@ -1,10 +1,14 @@
-# Q-Safe IIoT-AD — web dashboard container.
+# Q-Safe IIoT-AD — dashboard + live demo container.
 # Build from the REPO ROOT (not from web/), so the trained models/ and
 # top-level packages are available:
 #
 #   docker build -t qsafe-iiot-ad-web -f web/Dockerfile .
 #   docker run --rm -p 8000:8000 qsafe-iiot-ad-web
-#   open http://localhost:8000
+#   open http://localhost:8000            <- research dashboard
+#   open http://localhost:8000/link/console  <- Q-Safe Field Link demo
+#
+# The entrypoint is server.py, which mounts both applications in one process
+# (see its module docstring for why one service rather than two).
 
 FROM python:3.10-slim
 
@@ -16,7 +20,12 @@ WORKDIR /app
 
 COPY requirements.txt requirements.txt
 COPY web/requirements.txt web/requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt -r web/requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt -r web/requirements.txt \
+    # The demo needs websockets (uvicorn[standard] already provides them) and
+    # qrcode for the join page. matplotlib is deliberately NOT installed: it is
+    # only used by demo/record_demo.py to render figures locally, and it would
+    # add tens of megabytes to an image that has to fit a small instance.
+    && pip install --no-cache-dir "qrcode>=7.4"
 
 COPY scripts/setup_liboqs.sh scripts/setup_liboqs.sh
 RUN bash scripts/setup_liboqs.sh
@@ -29,5 +38,11 @@ ENV TF_CPP_MIN_LOG_LEVEL=3
 ENV PORT=8000
 EXPOSE 8000
 
+# Fail the build rather than shipping an image whose KEM cost ordering is
+# inverted: if the baseline profile is not cheaper than the hardened one, every
+# CPU-saving figure the system reports flips sign.
+RUN python scripts/verify_kem_ordering.py
+
 # Shell form (not exec-form JSON array) so $PORT is actually expanded.
-CMD uvicorn web.backend.app:app --host 0.0.0.0 --port ${PORT}
+# server:app mounts the dashboard at / and the Field Link demo at /link.
+CMD uvicorn server:app --host 0.0.0.0 --port ${PORT}

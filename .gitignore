@@ -25,3 +25,17 @@ models/benchmark_rounds.csv
 .idea/
 .vscode/
 *.swp
+
+# Q-Safe Field Link demo output. The replay page, the measured report and the
+# figures ARE committed -- they are the offline fallback and the evidence pack,
+# and they are small. The raw event trace is ~1 MB and fully regenerable with
+# `python -m demo.record_demo`, and the self-signed TLS material is per-machine.
+demo_output/demo_session.json
+demo_output/tls/
+
+# Empty nested clones that ended up inside the working tree (each contains only
+# .git/ and .gitattributes). Committing them would add broken gitlink entries
+# rather than files. Delete them locally if you do not need them.
+/QSFIN/
+/qsafe-iiot-ad/
+.write_test

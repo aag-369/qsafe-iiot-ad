@@ -1,0 +1,8 @@
+# Additional dependencies for the Q-Safe Field Link demo, on top of the
+# project's requirements.txt.
+fastapi>=0.110
+uvicorn[standard]>=0.27
+websockets>=12.0
+cryptography>=42.0
+qrcode>=7.4          # optional: QR codes on the join page (falls back to URLs)
+matplotlib>=3.8      # optional: figures in the recorded evidence pack

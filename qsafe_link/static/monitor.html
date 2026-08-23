@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0d0d0d">
+<title>Q-Safe · Control Room</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="__BASE__/static/shared.css">
+<script>window.QSAFE_BASE = "__BASE__";</script>
+<style>
+  body { padding: 12px; max-width: 520px; margin: 0 auto; }
+
+  .gauge-wrap { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 14px 12px 10px; }
+  .gauge { position: relative; width: 190px; height: 190px; }
+  .gauge svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .gauge .readout {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 2px;
+  }
+  .gauge .num { font-size: 42px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
+  .gauge .unit { font-size: 12px; color: var(--ink-3); letter-spacing: 0.08em; text-transform: uppercase; }
+
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 10px 0 12px; }
+  .stat { background: var(--surface-1); border: 1px solid var(--line); border-radius: 9px; padding: 8px 10px; text-align: center; }
+  .stat .k { font-size: 9.5px; color: var(--ink-3); letter-spacing: 0.07em; text-transform: uppercase; }
+  .stat .v { font-size: 17px; font-weight: 650; font-variant-numeric: tabular-nums; margin-top: 2px; }
+
+  .seal { display: flex; align-items: center; gap: 9px; font-size: 12.5px; }
+  .seal .ic { font-size: 16px; }
+  .seal.ok { color: var(--good); }
+  .seal.bad { color: var(--critical); }
+
+  /* --- watch layout: ?compact=1 ------------------------------------------
+     Round Wear OS displays clip the corners hard, so compact mode drops to a
+     single centred column with generous inset and nothing in the corners. */
+  body.compact { padding: 0; max-width: none; }
+  body.compact .desktop-only { display: none !important; }
+  body.compact .watch {
+    width: 100vw; height: 100vh;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 6px; padding: 13% ; text-align: center;
+  }
+  body.compact .watch .w-val { font-size: 40px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+  body.compact .watch .w-unit { font-size: 10px; color: var(--ink-3); letter-spacing: 0.1em; text-transform: uppercase; }
+  body.compact .watch .profile-badge { font-size: 13px; padding: 7px 13px; }
+  body.compact .watch .w-key { font-family: var(--mono); font-size: 10px; color: var(--ink-3); }
+  body:not(.compact) .watch { display: none; }
+</style>
+</head>
+<body>
+
+<!-- ---------------- watch / compact ---------------- -->
+<div class="watch">
+  <div class="w-unit" id="wDev">—</div>
+  <div class="w-val" id="wVal">—</div>
+  <div class="w-unit">bar</div>
+  <div class="profile-badge" id="wBadge" data-profile="BIKE-L1"><span id="wProf">BIKE-L1</span></div>
+  <div class="w-key" id="wKey">—</div>
+</div>
+
+<!-- ---------------- phone / desktop ---------------- -->
+<div class="desktop-only">
+  <header class="spread" style="margin-bottom:12px">
+    <div>
+      <div style="font-size:17px;font-weight:680" id="devName">Control Room</div>
+      <div style="font-size:11px;color:var(--ink-3)">receiving from <span class="mono" id="devId">—</span></div>
+    </div>
+    <span class="pill" id="connPill"><span class="dot"></span><span id="connText">connecting</span></span>
+  </header>
+
+  <div id="setup" class="card" style="margin-bottom:12px">
+    <div class="card-title">Choose a node to monitor</div>
+    <div id="devPicker" class="row" style="gap:8px"></div>
+    <div class="muted" style="font-size:11.5px;margin-top:10px">
+      On a smartwatch, add <span class="mono">?compact=1</span> to the URL.
+    </div>
+  </div>
+
+  <div id="live" style="display:none">
+    <div class="card" style="margin-bottom:10px">
+      <div class="gauge-wrap">
+        <div class="gauge">
+          <svg viewBox="0 0 120 120">
+            <circle cx="60" cy="60" r="52" fill="none" stroke="#2c2c2a" stroke-width="10"/>
+            <circle id="arc" cx="60" cy="60" r="52" fill="none" stroke="#3987e5" stroke-width="10"
+                    stroke-linecap="round" stroke-dasharray="327" stroke-dashoffset="327"/>
+          </svg>
+          <div class="readout">
+            <div class="num" id="gVal">—</div>
+            <div class="unit">bar</div>
+          </div>
+        </div>
+        <div class="profile-badge" id="badge" data-profile="BIKE-L1">
+          <span class="glyph" id="glyph">●</span><span id="profText">BIKE-L1</span>
+        </div>
+      </div>
+      <div class="seal ok" id="seal" style="justify-content:center;margin-top:4px">
+        <span class="ic">🔓</span><span id="sealText">waiting for frames…</span>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><div class="k">Flow</div><div class="v" id="sFlow">—</div></div>
+      <div class="stat"><div class="k">Temp</div><div class="v" id="sTemp">—</div></div>
+      <div class="stat"><div class="k">Vibration</div><div class="v" id="sVib">—</div></div>
+    </div>
+
+    <div class="card" style="margin-bottom:10px">
+      <div class="card-title">What an interceptor would have captured</div>
+      <div class="hex" id="cipherHex">—</div>
+      <div class="muted" style="font-size:11px;margin-top:8px">
+        The same frame, before this endpoint's session key was applied.
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Link state</div>
+      <div class="row" style="justify-content:space-between;font-size:12px">
+        <span class="muted">Session key</span><span class="mono" id="lKey">—</span>
+      </div>
+      <div class="row" style="justify-content:space-between;font-size:12px;margin-top:5px">
+        <span class="muted">Epoch · rekeys</span><span class="tnum" id="lEpoch">—</span>
+      </div>
+      <div class="row" style="justify-content:space-between;font-size:12px;margin-top:5px">
+        <span class="muted">Frames received</span><span class="tnum" id="lFrames">0</span>
+      </div>
+      <div class="banner info" style="margin-top:10px;font-size:11.5px" id="threatNote">
+        Channel clear.
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { connect, api, offlineBanner } from '__BASE__/static/qsafe.js';
+
+const el = (id) => document.getElementById(id);
+const banner = offlineBanner();
+const params = new URLSearchParams(location.search);
+const compact = params.get('compact') === '1';
+if (compact) document.body.classList.add('compact');
+
+let deviceId = params.get('device');
+let frames = 0, lastProfile = null;
+
+async function pickDevice() {
+  const state = await api('/api/state');
+  const devs = state.devices || [];
+  if (!devs.length) {
+    el('devPicker').innerHTML = `<span class="muted" style="font-size:12px">No nodes online yet. Start one on /node.</span>`;
+    setTimeout(pickDevice, 1500);
+    return;
+  }
+  if (devs.length === 1 || compact) { attach(devs[0].device_id, devs[0].display_name); return; }
+  el('devPicker').innerHTML = devs.map((d) =>
+    `<button data-id="${d.device_id}" data-nm="${d.display_name}">${d.display_name}</button>`).join('');
+  el('devPicker').querySelectorAll('button').forEach((b) =>
+    b.addEventListener('click', () => attach(b.dataset.id, b.dataset.nm)));
+}
+
+function attach(id, name) {
+  deviceId = id;
+  el('setup').style.display = 'none';
+  el('live').style.display = 'block';
+  el('devName').textContent = name || id;
+  el('devId').textContent = id;
+  el('wDev').textContent = (name || id).slice(0, 18);
+  open();
+}
+
+function open() {
+  const ws = connect(`/ws/monitor/${encodeURIComponent(deviceId)}`, {
+    onOpen: () => { banner.hide(); setConn(true); },
+    onClose: () => { banner.show(); setConn(false); },
+    onMessage: (msg) => {
+      if (msg.type === 'frame') applyFrame(msg.frame);
+      if (msg.type === 'device_state') applyState(msg.device);
+      if (msg.type === 'welcome' && msg.device) {
+        // Prefer the node's own display name over the URL slug.
+        if (msg.device.display_name) {
+          el('devName').textContent = msg.device.display_name;
+          el('wDev').textContent = msg.device.display_name.slice(0, 18);
+        }
+        applyState(msg.device);
+      }
+      if (msg.type === 'event' && msg.event.kind === 'rekey') flash();
+    },
+  });
+  setInterval(() => ws.send({ type: 'ping' }), 15000);
+}
+
+function setConn(ok) {
+  el('connPill').className = ok ? 'pill ok' : 'pill crit';
+  el('connText').textContent = ok ? 'linked' : 'offline';
+}
+
+function applyFrame(f) {
+  frames++;
+  const p = f.payload || {};
+  const bar = p.pressure_bar ?? 0;
+  el('gVal').textContent = bar.toFixed(2);
+  el('wVal').textContent = bar.toFixed(2);
+  // 0–8 bar across the 327-unit arc.
+  el('arc').setAttribute('stroke-dashoffset', String(327 * (1 - Math.min(1, bar / 8))));
+  el('sFlow').textContent = (p.flow_lpm ?? 0).toFixed(0);
+  el('sTemp').textContent = (p.temp_c ?? 0).toFixed(1);
+  el('sVib').textContent = (p.vibration_mm_s ?? 0).toFixed(2);
+  el('lFrames').textContent = frames;
+  el('cipherHex').textContent = f.ciphertext_preview.replace(/(.{2})/g, '$1 ').trim() + ' …';
+  el('seal').className = 'seal ok';
+  el('sealText').innerHTML = `decrypted &amp; authenticated · seq ${f.seq} · epoch ${f.epoch}`;
+  el('seal').querySelector('.ic').textContent = '🔒';
+  setProfile(f.profile, f.key_fingerprint, f.epoch);
+}
+
+function applyState(d) {
+  if (!d) return;
+  setProfile(d.profile, d.session?.key_fingerprint, d.session?.epoch, d.session?.n_rekeys);
+  const note = el('threatNote');
+  if (d.profile === 'HQC-128') {
+    note.className = 'banner warn';
+    note.innerHTML = `Interception evidence on the quantum channel — link hardened to HQC-128.
+      Detector confidence ${(d.confidence ?? 0).toFixed(2)}, tagged <b>${d.predicted_type}</b>.`;
+  } else {
+    note.className = 'banner info';
+    note.textContent = 'Channel clear.';
+  }
+}
+
+function setProfile(profile, fp, epoch, rekeys) {
+  if (!profile) return;
+  for (const b of [el('badge'), el('wBadge')]) b.dataset.profile = profile;
+  el('profText').textContent = profile;
+  el('wProf').textContent = profile;
+  el('glyph').textContent = profile === 'HQC-128' ? '▲' : '●';
+  if (fp) { el('lKey').textContent = fp; el('wKey').textContent = fp.slice(0, 8); }
+  if (epoch != null) el('lEpoch').textContent = `${epoch}${rekeys != null ? ` · ${rekeys}` : ''}`;
+  if (lastProfile && lastProfile !== profile) flash();
+  lastProfile = profile;
+}
+
+function flash() {
+  for (const b of [el('badge'), el('wBadge')]) {
+    b.classList.remove('rekey-flash');
+    void b.offsetWidth;
+    b.classList.add('rekey-flash');
+  }
+  if (navigator.vibrate) navigator.vibrate([40, 60, 40]);
+}
+
+if (deviceId) attach(deviceId, params.get('name')); else pickDevice();
+</script>
+</body>
+</html>

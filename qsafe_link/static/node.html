@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0d0d0d">
+<title>Q-Safe · Field Sensor</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="__BASE__/static/shared.css">
+<script>window.QSAFE_BASE = "__BASE__";</script>
+<style>
+  body { padding: 12px 12px calc(12px + env(safe-area-inset-bottom)); max-width: 560px; margin: 0 auto; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+  header .nm { font-size: 17px; font-weight: 680; }
+  header .role { font-size: 11px; color: var(--ink-3); }
+
+  .hero { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 18px 12px; margin-bottom: 12px; }
+  .hero .profile-badge { font-size: 21px; padding: 14px 24px; }
+  .hero .why { font-size: 12px; color: var(--ink-2); text-align: center; line-height: 1.45; max-width: 34ch; }
+  .keyline { font-family: var(--mono); font-size: 12px; color: var(--ink-3); letter-spacing: 0.02em; }
+  .keyline b { color: var(--ink-1); }
+
+  .pad {
+    position: relative; height: 168px; border-radius: 12px; margin-bottom: 10px;
+    background: linear-gradient(180deg, var(--surface-2), var(--surface-1));
+    border: 1px solid var(--line); overflow: hidden; touch-action: none; cursor: grab;
+  }
+  .pad .fill { position: absolute; inset: auto 0 0 0; background: color-mix(in srgb, var(--series-qber) 30%, transparent); transition: height 90ms linear; }
+  .pad .lbl { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; pointer-events: none; }
+  .pad .val { font-size: 40px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .pad .cap { font-size: 11px; color: var(--ink-2); letter-spacing: 0.06em; text-transform: uppercase; }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+  .metric { background: var(--surface-1); border: 1px solid var(--line); border-radius: 9px; padding: 9px 11px; }
+  .metric .k { font-size: 10px; color: var(--ink-3); letter-spacing: 0.07em; text-transform: uppercase; }
+  .metric .v { font-size: 19px; font-weight: 650; font-variant-numeric: tabular-nums; margin-top: 2px; }
+  .metric .u { font-size: 11px; color: var(--ink-3); font-weight: 500; }
+
+  .wire { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; text-align: center; margin-bottom: 8px; }
+  .wire .box { background: var(--surface-2); border-radius: 8px; padding: 8px 6px; }
+  .wire .box .n { font-size: 17px; font-weight: 680; font-variant-numeric: tabular-nums; }
+  .wire .box .l { font-size: 10px; color: var(--ink-3); margin-top: 2px; }
+  .wire .arrow { color: var(--ink-3); font-size: 15px; }
+
+  .setup { display: flex; flex-direction: column; gap: 10px; }
+  .setup input {
+    font-family: inherit; font-size: 15px; padding: 11px 12px; border-radius: 9px;
+    background: var(--surface-2); border: 1px solid var(--line); color: var(--ink-1); width: 100%;
+  }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<!-- ---------------- identity setup ---------------- -->
+<div id="setup" class="card setup">
+  <div>
+    <h1 style="font-size:18px">Q-Safe Field Sensor</h1>
+    <div class="muted" style="font-size:12.5px;margin-top:6px;line-height:1.5">
+      This phone becomes an industrial edge node. Its telemetry crosses a link
+      protected by post-quantum cryptography that re-keys itself when the
+      quantum channel shows evidence of interception.
+    </div>
+  </div>
+  <label class="muted" style="font-size:11px;letter-spacing:.07em;text-transform:uppercase">Node name</label>
+  <input id="nameInput" placeholder="Pump House A" autocomplete="off">
+  <button id="startBtn" style="padding:13px">Bring node online</button>
+</div>
+
+<!-- ---------------- live node ---------------- -->
+<div id="live" class="hidden">
+  <header>
+    <div>
+      <div class="nm" id="devName">—</div>
+      <div class="role">field sensor · <span id="devId" class="mono"></span></div>
+    </div>
+    <span class="pill" id="connPill"><span class="dot"></span><span id="connText">connecting</span></span>
+  </header>
+
+  <div class="card hero">
+    <div class="profile-badge" id="profileBadge" data-profile="BIKE-L1">
+      <span class="glyph" id="profileGlyph">●</span><span id="profileText">BIKE-L1</span>
+    </div>
+    <div class="why" id="profileWhy">Baseline profile — no evidence of interception on the quantum channel.</div>
+    <div class="keyline">session key <b id="keyFp">—</b> · epoch <b id="epochNum">0</b></div>
+  </div>
+
+  <div class="pad" id="pad">
+    <div class="fill" id="padFill" style="height:45%"></div>
+    <div class="lbl">
+      <div class="val" id="setpointVal">45</div>
+      <div class="cap">pump setpoint %</div>
+      <div class="cap" style="font-size:10px;opacity:.7">drag to change</div>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="metric"><div class="k">Pressure</div><div class="v"><span id="mPressure">—</span> <span class="u">bar</span></div></div>
+    <div class="metric"><div class="k">Flow</div><div class="v"><span id="mFlow">—</span> <span class="u">L/min</span></div></div>
+    <div class="metric"><div class="k">Temperature</div><div class="v"><span id="mTemp">—</span> <span class="u">°C</span></div></div>
+    <div class="metric"><div class="k">Vibration</div><div class="v"><span id="mVib">—</span> <span class="u">mm/s</span></div></div>
+  </div>
+
+  <div class="card" style="margin-bottom:10px">
+    <div class="card-title">What actually crosses the link</div>
+    <div class="wire">
+      <div class="box"><div class="n" id="wPlain">—</div><div class="l">plaintext B</div></div>
+      <div class="arrow">→ 🔒 →</div>
+      <div class="box"><div class="n" id="wCipher">—</div><div class="l">ciphertext B</div></div>
+    </div>
+    <div class="hex" id="wHex">waiting for first frame…</div>
+    <div class="muted" style="font-size:11px;margin-top:8px">
+      AES-256-GCM under a key derived from a real <span id="wMech">BIKE-L1</span> handshake.
+      <span id="wFrames">0</span> frames sealed.
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="spread">
+      <div>
+        <div class="card-title" style="margin:0">Vibration source</div>
+        <div class="muted" style="font-size:11.5px;margin-top:4px" id="motionNote">synthetic (derived from setpoint)</div>
+      </div>
+      <button id="motionBtn" style="padding:7px 11px;font-size:12px">Use accelerometer</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { connect, fmt, offlineBanner } from '__BASE__/static/qsafe.js';
+
+const el = (id) => document.getElementById(id);
+const banner = offlineBanner();
+const params = new URLSearchParams(location.search);
+
+function storedName() {
+  try { return localStorage.getItem('qsafe-node-name') || ''; } catch { return ''; }
+}
+function storeName(v) { try { localStorage.setItem('qsafe-node-name', v); } catch {} }
+
+el('nameInput').value = params.get('name') || storedName() || '';
+
+let deviceId = null, displayName = null, ws = null;
+let setpoint = 45, temp = 42, useMotion = false, motionVib = 0;
+let framesSent = 0, lastProfile = null;
+
+/* ---------- start ---------- */
+function start() {
+  displayName = (el('nameInput').value || 'Pump House A').trim().slice(0, 40);
+  storeName(displayName);
+  deviceId = params.get('device')
+    || displayName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24)
+    || 'node';
+  el('setup').classList.add('hidden');
+  el('live').classList.remove('hidden');
+  el('devName').textContent = displayName;
+  el('devId').textContent = deviceId;
+  openSocket();
+  startTelemetry();
+}
+el('startBtn').addEventListener('click', start);
+el('nameInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') start(); });
+
+/* ---------- socket ---------- */
+function openSocket() {
+  ws = connect(`/ws/sensor/${encodeURIComponent(deviceId)}`, {
+    onOpen: () => { banner.hide(); setConn(true); ws.send({ type: 'rename', display_name: displayName }); },
+    onClose: () => { banner.show(); setConn(false); },
+    onMessage: (msg) => {
+      if (msg.type === 'welcome' && msg.device) applyDevice(msg.device);
+      if (msg.type === 'ack') applyAck(msg);
+      if (msg.type === 'device_state') applyDevice(msg.device);
+    },
+  });
+}
+
+function setConn(ok) {
+  el('connPill').className = ok ? 'pill ok' : 'pill crit';
+  el('connText').textContent = ok ? 'linked' : 'offline';
+}
+
+function applyDevice(d) {
+  if (!d) return;
+  setProfile(d.profile, d.session?.key_fingerprint, d.session?.epoch, d.session?.kem_mechanism);
+}
+
+function applyAck(a) {
+  framesSent++;
+  el('wPlain').textContent = a.plaintext_bytes;
+  el('wCipher').textContent = a.ciphertext_bytes;
+  el('wFrames').textContent = framesSent;
+  el('wHex').textContent = a.ciphertext_preview.replace(/(.{2})/g, '$1 ').trim() + ' …';
+  setProfile(a.profile, a.key_fingerprint, a.epoch);
+}
+
+function setProfile(profile, fp, epoch, mech) {
+  if (!profile) return;
+  const badge = el('profileBadge');
+  badge.dataset.profile = profile;
+  el('profileText').textContent = profile;
+  el('profileGlyph').textContent = profile === 'HQC-128' ? '▲' : '●';
+  el('profileWhy').textContent = profile === 'HQC-128'
+    ? 'Hardened profile — the detector found evidence of interception, so the link re-keyed under HQC-128.'
+    : 'Baseline profile — no evidence of interception on the quantum channel.';
+  if (fp) el('keyFp').textContent = fp;
+  if (epoch != null) el('epochNum').textContent = epoch;
+  if (mech) el('wMech').textContent = mech;
+
+  if (lastProfile && lastProfile !== profile) {
+    badge.classList.remove('rekey-flash');
+    void badge.offsetWidth;
+    badge.classList.add('rekey-flash');
+    if (navigator.vibrate) navigator.vibrate(profile === 'HQC-128' ? [40, 60, 40] : 30);
+  }
+  lastProfile = profile;
+}
+
+/* ---------- touch pad ---------- */
+const pad = el('pad');
+function setFromEvent(ev) {
+  const rect = pad.getBoundingClientRect();
+  const touch = ev.touches && ev.touches[0];
+  const y = (touch ? touch.clientY : ev.clientY) - rect.top;
+  setpoint = Math.max(0, Math.min(100, Math.round((1 - y / rect.height) * 100)));
+  el('setpointVal').textContent = setpoint;
+  el('padFill').style.height = `${setpoint}%`;
+}
+let dragging = false;
+pad.addEventListener('pointerdown', (e) => { dragging = true; pad.setPointerCapture(e.pointerId); setFromEvent(e); });
+pad.addEventListener('pointermove', (e) => { if (dragging) setFromEvent(e); });
+pad.addEventListener('pointerup', () => { dragging = false; });
+pad.addEventListener('pointercancel', () => { dragging = false; });
+
+/* ---------- accelerometer (opportunistic) ----------
+   Browsers gate DeviceMotion behind a secure context, and a plain http://
+   LAN address is not one — so this is an upgrade, never a requirement. The
+   node produces perfectly good telemetry from the touch pad either way. */
+el('motionBtn').addEventListener('click', async () => {
+  try {
+    if (typeof DeviceMotionEvent !== 'undefined'
+        && typeof DeviceMotionEvent.requestPermission === 'function') {
+      const res = await DeviceMotionEvent.requestPermission();
+      if (res !== 'granted') throw new Error('permission denied');
+    }
+    if (typeof DeviceMotionEvent === 'undefined') throw new Error('not supported');
+    window.addEventListener('devicemotion', (e) => {
+      const a = e.accelerationIncludingGravity;
+      if (!a) return;
+      const mag = Math.sqrt((a.x || 0) ** 2 + (a.y || 0) ** 2 + (a.z || 0) ** 2);
+      motionVib = Math.abs(mag - 9.81);
+    });
+    useMotion = true;
+    el('motionNote').textContent = 'live accelerometer — shake the phone';
+    el('motionBtn').textContent = 'Accelerometer live';
+    el('motionBtn').disabled = true;
+  } catch (err) {
+    el('motionNote').textContent = `unavailable (${err.message}) — needs HTTPS on most phones`;
+  }
+});
+
+/* ---------- telemetry ---------- */
+function startTelemetry() {
+  setInterval(() => {
+    const target = 20 + setpoint * 0.55;
+    temp += (target - temp) * 0.06 + (Math.random() - 0.5) * 0.15;
+    const pressure = 1.2 + setpoint * 0.062 + (Math.random() - 0.5) * 0.08;
+    const flow = setpoint * 3.4 + (Math.random() - 0.5) * 4;
+    const vib = useMotion
+      ? Math.min(40, motionVib * 3.2)
+      : 0.6 + setpoint * 0.021 + Math.random() * 0.35;
+
+    el('mPressure').textContent = pressure.toFixed(2);
+    el('mFlow').textContent = flow.toFixed(0);
+    el('mTemp').textContent = temp.toFixed(1);
+    el('mVib').textContent = vib.toFixed(2);
+
+    ws && ws.send({
+      type: 'telemetry',
+      payload: {
+        setpoint_pct: setpoint,
+        pressure_bar: +pressure.toFixed(3),
+        flow_lpm: +flow.toFixed(1),
+        temp_c: +temp.toFixed(2),
+        vibration_mm_s: +vib.toFixed(3),
+        src: useMotion ? 'accel' : 'touch',
+      },
+    });
+  }, 250);
+}
+</script>
+</body>
+</html>

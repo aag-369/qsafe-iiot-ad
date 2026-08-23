@@ -1,0 +1,591 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Q-Safe Field Link — Operator Console</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="__BASE__/static/shared.css">
+<script>/* Prefix this app is mounted under; substituted server-side. */
+window.QSAFE_BASE = "__BASE__";</script>
+<style>
+  body { padding: 14px 18px 18px; }
+
+  header.top {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    padding-bottom: 12px; margin-bottom: 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  .brand { display: flex; flex-direction: column; gap: 2px; }
+  .brand h1 { font-size: 19px; letter-spacing: -0.015em; }
+  .brand .sub { font-size: 11px; color: var(--ink-3); }
+  header.top .grow { flex: 1; }
+
+  .tiles { grid-template-columns: repeat(5, minmax(0,1fr)); margin-bottom: 12px; }
+
+  .layout { display: grid; grid-template-columns: minmax(0, 2.05fr) minmax(320px, 1fr); gap: 12px; }
+  @media (max-width: 1100px) { .layout { grid-template-columns: 1fr; } }
+
+  .col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+
+  .chart-wrap { position: relative; }
+  .chart-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+  .chart-head .now { font-size: 20px; font-weight: 680; font-variant-numeric: tabular-nums; }
+
+  .scenario-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .scenario-grid button { text-align: left; padding: 10px 12px; line-height: 1.3; }
+  .scenario-grid button .t { display: block; font-size: 13px; font-weight: 650; }
+  .scenario-grid button .s { display: block; font-size: 10.5px; color: var(--ink-3); margin-top: 2px; font-weight: 500; }
+  .scenario-grid button[aria-pressed="true"] .s { color: inherit; opacity: 0.75; }
+
+  .guide {
+    margin-top: 10px; padding: 10px 12px; border-radius: 8px;
+    background: var(--surface-2); border: 1px solid var(--line);
+    font-size: 12px; line-height: 1.5; color: var(--ink-2);
+  }
+  .guide b { color: var(--ink-1); }
+
+  .devlist { display: flex; flex-direction: column; gap: 6px; max-height: 232px; }
+  .dev {
+    display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px;
+    padding: 8px 10px; border-radius: 8px; cursor: pointer;
+    background: var(--surface-2); border: 1px solid transparent;
+  }
+  .dev:hover { border-color: var(--line); }
+  .dev[aria-selected="true"] { border-color: color-mix(in srgb, var(--series-qber) 60%, transparent); }
+  .dev .nm { font-size: 12.5px; font-weight: 620; }
+  .dev .meta { font-size: 10.5px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+  .dev .prof { font-size: 10px; font-weight: 700; padding: 3px 7px; border-radius: 5px; white-space: nowrap; }
+
+  .log { max-height: 190px; font-size: 11.5px; }
+  .log .entry {
+    display: grid; grid-template-columns: 58px 1fr auto; gap: 8px;
+    padding: 5px 0; border-bottom: 1px solid var(--surface-3);
+    font-variant-numeric: tabular-nums;
+  }
+  .log .entry:last-child { border-bottom: none; }
+  .log .t { color: var(--ink-3); font-family: var(--mono); font-size: 10.5px; }
+  .log .up { color: var(--warning); }
+  .log .down { color: var(--good); }
+
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; font-size: 11.5px; }
+  .kv dt { color: var(--ink-3); }
+  .kv dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+
+  .compare { display: grid; grid-template-columns: 1fr; gap: 8px; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">
+    <h1>Q-Safe Field Link</h1>
+    <div class="sub">Crypto-agile, AI-gated post-quantum security · live control loop</div>
+  </div>
+  <div class="grow"></div>
+  <div class="row" id="backendPills"></div>
+  <div class="pill muted mono tnum" id="clock">--:--:--</div>
+</header>
+
+<div class="tiles">
+  <div class="tile">
+    <div class="label">Active profile</div>
+    <div class="value" id="tProfile">—</div>
+    <div class="sub" id="tProfileSub">waiting for a device</div>
+  </div>
+  <div class="tile">
+    <div class="label">CPU saved vs always-on HQC-128</div>
+    <div class="value good" id="tSaved">—</div>
+    <div class="sub">paper method: 1 KEM/round</div>
+  </div>
+  <div class="tile">
+    <div class="label">Rounds on baseline</div>
+    <div class="value" id="tBaseline">—</div>
+    <div class="sub" id="tBaselineSub">BIKE-L1 duty cycle</div>
+  </div>
+  <div class="tile">
+    <div class="label">Escalations</div>
+    <div class="value warn" id="tEsc">0</div>
+    <div class="sub" id="tEscSub">real KEM re-handshakes</div>
+  </div>
+  <div class="tile">
+    <div class="label">Detection latency</div>
+    <div class="value" id="tLat">—</div>
+    <div class="sub" id="tLatSub">attack onset → HQC-128 live</div>
+  </div>
+</div>
+
+<div class="layout">
+  <!-- ---------------- left: the physics and the decision --------------- -->
+  <div class="col">
+    <div class="card chart-wrap">
+      <div class="chart-head">
+        <div>
+          <div class="card-title" style="margin:0">Quantum bit error rate · <span id="qberDev">—</span></div>
+          <div class="legend" style="margin-top:6px">
+            <span class="item"><span class="swatch" style="background:var(--series-qber)"></span>QBER (measured from BB84 sifted key)</span>
+            <span class="item"><span class="swatch block" style="background:var(--good);opacity:.35"></span>BIKE-L1 active</span>
+            <span class="item"><span class="swatch block" style="background:var(--warning);opacity:.35"></span>HQC-128 active</span>
+          </div>
+        </div>
+        <div class="now" id="qberNow" style="color:var(--series-qber)">—</div>
+      </div>
+      <canvas id="qberChart" data-h="150" style="height:150px"></canvas>
+      <div class="chart-tooltip" id="qberTip"></div>
+    </div>
+
+    <div class="card chart-wrap">
+      <div class="chart-head">
+        <div>
+          <div class="card-title" style="margin:0">GRU detector confidence</div>
+          <div class="legend" style="margin-top:6px">
+            <span class="item"><span class="swatch" style="background:var(--series-conf)"></span>Intrusion confidence c<sub>t</sub></span>
+            <span class="item muted">— — escalate threshold τ<sub>up</sub></span>
+          </div>
+        </div>
+        <div class="now" id="confNow" style="color:var(--series-conf)">—</div>
+      </div>
+      <canvas id="confChart" data-h="140" style="height:140px"></canvas>
+      <div class="chart-tooltip" id="confTip"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Active KEM profile over time</div>
+      <canvas id="stripChart" data-h="26" style="height:26px"></canvas>
+      <div class="legend" style="margin-top:8px">
+        <span class="item"><span class="swatch block" style="background:var(--good)"></span>BIKE-L1 — low-overhead baseline</span>
+        <span class="item"><span class="swatch block" style="background:var(--warning)"></span>HQC-128 — hardened, IND-CCA2</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Rekey log — every entry is a real KEM handshake</div>
+      <div class="log scroll" id="rekeyLog">
+        <div class="muted" style="font-size:12px">No profile changes yet.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ---------------- right: control and fleet ------------------------- -->
+  <div class="col">
+    <div class="card">
+      <div class="card-title">Adversary control — drives the real BB84 simulation</div>
+      <div class="scenario-grid" id="scenarioGrid"></div>
+      <div class="guide" id="guide">
+        Pick a scenario. Each one sets the interception and channel-noise
+        parameters of the <b>actual</b> BB84 circuit for the selected device —
+        the QBER you see is measured from the simulated quantum channel, never
+        typed in.
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="spread" style="margin-bottom:8px">
+        <div class="card-title" style="margin:0">Devices</div>
+        <button id="addDevice" style="padding:5px 10px;font-size:11.5px">+ Add device</button>
+      </div>
+      <div class="devlist scroll" id="devList"></div>
+    </div>
+
+    <div class="card" id="fleetCard">
+      <div class="card-title">Fleet correlator</div>
+      <div id="fleetBody">
+        <div class="banner info" id="fleetBanner">
+          Needs <b id="fleetMin">3</b> devices escalating <em>and</em> agreeing on
+          attack type before it calls a campaign.
+        </div>
+        <dl class="kv" style="margin-top:10px">
+          <dt>Devices online</dt><dd id="fDevices">0</dd>
+          <dt>Currently escalated</dt><dd id="fEscalated">0</dd>
+          <dt>Campaign alerts</dt><dd id="fAlerts">0</dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Protected link · <span id="linkDev">—</span></div>
+      <dl class="kv">
+        <dt>KEM mechanism</dt><dd id="lMech">—</dd>
+        <dt>Session key</dt><dd class="mono" id="lKey">—</dd>
+        <dt>Epoch</dt><dd id="lEpoch">—</dd>
+        <dt>Last handshake</dt><dd id="lHs">—</dd>
+        <dt>Frames sealed</dt><dd id="lFrames">0</dd>
+        <dt>AEAD overhead</dt><dd id="lOver">—</dd>
+      </dl>
+      <div class="card-title" style="margin-top:12px">Last frame on the wire</div>
+      <div class="hex" id="lHex">—</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Per-round KEM cost — this session</div>
+      <canvas id="costChart" data-h="70" style="height:70px"></canvas>
+      <div class="muted" style="font-size:11px;margin-top:8px" id="costNote">
+        Priced with per-profile handshake costs measured on this host.
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { connect, api, fmt, PALETTE, PROFILE_COLOR, drawSeries, drawProfileStrip,
+         drawCompareBars, attachCrosshair, offlineBanner } from '__BASE__/static/qsafe.js';
+
+const el = (id) => document.getElementById(id);
+const banner = offlineBanner();
+
+let state = { devices: [], fleet: null, backend: null };
+let focus = null;
+let scenarios = [];
+let activeScenario = 'calm';
+let rekeys = [];          // rebuilt from each snapshot, never accumulated
+let detections = [];      // server-measured, so it survives a console reload
+let detectionSummary = {};
+
+/* ---------- header ---------- */
+setInterval(() => { el('clock').textContent = fmt.clock(); }, 1000);
+
+function renderBackend(b) {
+  if (!b) return;
+  const pills = [];
+  pills.push(b.using_real_liboqs
+    ? `<span class="pill ok"><span class="dot"></span>real liboqs · BIKE-L1 / HQC-1</span>`
+    : `<span class="pill warn"><span class="dot"></span>SIMULATED KEM — not real cryptography</span>`);
+  pills.push(`<span class="pill"><span class="dot" style="background:var(--series-conf)"></span>${b.detector_backend} · threshold ${b.detector_threshold.toFixed(2)} · window ${b.detector_window}</span>`);
+  pills.push(`<span class="pill muted">BIKE ${b.bike_reference_ms.toFixed(2)} ms · HQC ${b.hqc_reference_ms.toFixed(2)} ms</span>`);
+  pills.push(`<span class="pill muted">${b.n_qubits_per_round} qubits · ${b.rounds_per_second}/s</span>`);
+  el('backendPills').innerHTML = pills.join('');
+}
+
+/* ---------- scenarios ---------- */
+async function loadScenarios() {
+  const r = await api('/api/scenarios');
+  scenarios = r.scenarios;
+  el('scenarioGrid').innerHTML = scenarios.map((s) => `
+    <button data-key="${s.key}" class="${s.key === 'calm' ? 'calm' : ''}"
+            aria-pressed="${s.key === 'calm'}" title="${s.detail.replace(/"/g, '&quot;')}">
+      <span class="t">${s.title}</span>
+      <span class="s">${s.subtitle}</span>
+    </button>`).join('');
+  el('scenarioGrid').querySelectorAll('button').forEach((b) => {
+    b.addEventListener('click', () => applyScenario(b.dataset.key));
+  });
+}
+
+async function applyScenario(key) {
+  const s = scenarios.find((x) => x.key === key);
+  if (!s) return;
+  const target = s.scope === 'fleet'
+    ? null
+    : (focus || state.devices[0]?.device_id || null);
+  if (s.scope === 'single' && !target) {
+    el('guide').innerHTML = '<b>No device selected.</b> Add a device, or open <span class="mono">/node</span> on a phone, before running a single-device scenario.';
+    return;
+  }
+  try {
+    await api('/api/scenario', 'POST', { key, device_id: target });
+  } catch (e) { return; }
+  activeScenario = key;
+  el('scenarioGrid').querySelectorAll('button').forEach((b) => {
+    b.setAttribute('aria-pressed', String(b.dataset.key === key));
+  });
+  el('guide').innerHTML = `<b>${s.title}.</b> ${s.detail}<br><br><b>What to watch:</b> ${s.expect}`;
+}
+
+/* ---------- devices ---------- */
+function renderDevices() {
+  const list = el('devList');
+  if (!state.devices.length) {
+    // A hosted instance starts with nothing running, so a visitor arriving
+    // from a shared link needs one obvious way in.
+    list.innerHTML = `
+      <div class="muted" style="font-size:12px;line-height:1.5;margin-bottom:10px">
+        Nothing is running yet. Start a simulated fleet, or open
+        <span class="mono">${(window.QSAFE_BASE || '') + '/node'}</span> on a phone.
+      </div>
+      <button id="startDemo" style="width:100%;padding:11px">▶ Start a 3-device demonstration</button>`;
+    const btn = document.getElementById('startDemo');
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      btn.textContent = 'Starting — loading models…';
+      try {
+        await api('/api/start-demo?n=3', 'POST');
+      } catch (e) {
+        btn.disabled = false;
+        btn.textContent = '▶ Start a 3-device demonstration';
+      }
+    });
+    return;
+  }
+  list.innerHTML = state.devices.map((d) => {
+    const c = PROFILE_COLOR[d.profile] || PALETTE.ink3;
+    const sensors = [d.connected_sensor ? 'sensor' : null, d.connected_monitor ? 'monitor' : null]
+      .filter(Boolean).join(' · ') || 'simulated';
+    return `<div class="dev" data-id="${d.device_id}" aria-selected="${d.device_id === focus}">
+      <div>
+        <div class="nm">${d.display_name}</div>
+        <div class="meta">QBER ${d.qber == null ? '—' : d.qber.toFixed(3)} · c=${d.confidence.toFixed(2)} · ${sensors}</div>
+      </div>
+      <div class="prof" style="background:${c}22;color:${c}">${d.profile || '—'}</div>
+    </div>`;
+  }).join('');
+  list.querySelectorAll('.dev').forEach((n) => {
+    n.addEventListener('click', () => { focus = n.dataset.id; renderAll(); });
+  });
+}
+
+el('addDevice').addEventListener('click', async () => {
+  const n = state.devices.length + 1;
+  const id = `plant-${String(n).padStart(2, '0')}`;
+  await api('/api/devices', 'POST', { device_id: id, display_name: `Node ${n}` });
+});
+
+/* ---------- charts ---------- */
+const qberTip = el('qberTip'), confTip = el('confTip');
+let lastHistory = [];
+
+function profileBands(history) {
+  const bands = [];
+  let start = 0;
+  for (let i = 1; i <= history.length; i++) {
+    if (i === history.length || history[i].profile !== history[start].profile) {
+      bands.push({ from: start, to: i - 1, color: PROFILE_COLOR[history[start].profile] || PALETTE.ink3 });
+      start = i;
+    }
+  }
+  return bands;
+}
+
+function renderCharts() {
+  const dev = state.devices.find((d) => d.device_id === focus);
+  const history = dev?.history || [];
+  lastHistory = history;
+
+  el('qberDev').textContent = dev ? dev.display_name : '—';
+  el('linkDev').textContent = dev ? dev.display_name : '—';
+
+  const qber = history.map((h) => h.qber);
+  const conf = history.map((h) => h.confidence);
+  const bands = profileBands(history);
+  const markers = history.map((h, i) => (h.escalated || h.de_escalated)
+    ? { index: i, color: h.escalated ? PALETTE.warning : PALETTE.good } : null).filter(Boolean);
+
+  const yMax = Math.max(0.25, Math.ceil((Math.max(0, ...qber) + 0.05) * 20) / 20);
+  const g1 = drawSeries(el('qberChart'), qber, {
+    color: PALETTE.qber, yMin: 0, yMax, bands, markers,
+    yFormat: (v) => v.toFixed(2),
+  });
+  el('qberChart').__setGeom && el('qberChart').__setGeom({ ...g1, n: qber.length });
+
+  const g2 = drawSeries(el('confChart'), conf, {
+    color: PALETTE.conf, yMin: 0, yMax: 1,
+    threshold: state.backend?.detector_threshold ?? 0.86,
+    thresholdLabel: `τ_up = ${(state.backend?.detector_threshold ?? 0.86).toFixed(2)}`,
+    markers, yFormat: (v) => v.toFixed(1),
+  });
+  el('confChart').__setGeom && el('confChart').__setGeom({ ...g2, n: conf.length });
+
+  drawProfileStrip(el('stripChart'), history.map((h) => h.profile));
+
+  el('qberNow').textContent = qber.length ? qber[qber.length - 1].toFixed(4) : '—';
+  el('confNow').textContent = conf.length ? conf[conf.length - 1].toFixed(3) : '—';
+
+  const t = state.fleet?.totals;
+  if (t && t.round_static_ms > 0) {
+    drawCompareBars(el('costChart'), [
+      { label: 'AI-gated adaptive', value: t.round_adaptive_ms, display: `${t.round_adaptive_ms.toFixed(0)} ms`, color: PALETTE.good },
+      { label: 'Always-on HQC-128', value: t.round_static_ms, display: `${t.round_static_ms.toFixed(0)} ms`, color: PALETTE.warning },
+    ]);
+    el('costNote').innerHTML = `Over <b>${t.total_rounds.toLocaleString()}</b> live rounds. Paper reports 73.2% on a 2,000-round stream.`;
+  }
+}
+
+attachCrosshair(el('qberChart'), qberTip, (x, g) => {
+  if (!lastHistory.length) return null;
+  const i = Math.round(((x - g.padL) / g.plotW) * (lastHistory.length - 1));
+  const h = lastHistory[Math.max(0, Math.min(lastHistory.length - 1, i))];
+  if (!h) return null;
+  return `<b>round ${h.t}</b><br>QBER ${h.qber.toFixed(4)}<br>profile ${h.profile}<br>truth: ${h.ground_truth_attack ? h.ground_truth_type : 'benign'}`;
+});
+attachCrosshair(el('confChart'), confTip, (x, g) => {
+  if (!lastHistory.length) return null;
+  const i = Math.round(((x - g.padL) / g.plotW) * (lastHistory.length - 1));
+  const h = lastHistory[Math.max(0, Math.min(lastHistory.length - 1, i))];
+  if (!h) return null;
+  return `<b>round ${h.t}</b><br>confidence ${h.confidence.toFixed(4)}<br>type tag: ${h.predicted_type}`;
+});
+
+/* ---------- tiles + link panel ---------- */
+function renderTiles() {
+  const dev = state.devices.find((d) => d.device_id === focus);
+  const t = state.fleet?.totals;
+
+  if (!dev) {
+    el('tProfile').textContent = '—';
+    el('tProfile').className = 'value';
+    el('tProfileSub').textContent = state.devices.length ? 'select a device' : 'waiting for a device';
+    for (const id of ['lMech', 'lKey', 'lEpoch', 'lHs']) el(id).textContent = '—';
+    el('lFrames').textContent = '0';
+    el('lOver').textContent = '—';
+    el('lHex').textContent = '—';
+  }
+
+  if (dev) {
+    const p = dev.profile;
+    const tp = el('tProfile');
+    tp.textContent = p;
+    tp.className = 'value ' + (p === 'HQC-128' ? 'warn' : 'good');
+    el('tProfileSub').textContent = p === 'HQC-128'
+      ? 'hardened — interception evidence present'
+      : 'baseline — no evidence of interception';
+  }
+
+  if (t) {
+    el('tSaved').textContent = fmt.pct(t.paper_equivalent_saved_pct);
+    el('tBaseline').textContent = fmt.pct(t.baseline_round_fraction * 100, 0);
+    el('tBaselineSub').textContent = `${t.total_rounds.toLocaleString()} rounds executed`;
+  }
+  // Counted from monotonic per-device totals, not from the rekey log: that
+  // log is capped for payload size, so counting it would make this tile go
+  // *down* on a long-running device.
+  const esc = t ? (t.n_escalations ?? 0) : 0;
+  const deEsc = t ? (t.n_de_escalations ?? 0) : 0;
+  el('tEsc').textContent = esc;
+  el('tEscSub').textContent = `${esc + deEsc} total rekeys`;
+
+  if (detections.length) {
+    // Same median definition as the exported report (statistics.median),
+    // so the screen and the handout never disagree.
+    el('tLat').textContent = `${median(detections.map((d) => d.latency_s)).toFixed(2)} s`;
+    el('tLat').className = 'value good';
+    const n = detectionSummary.n_episodes ?? detections.length;
+    const fp = detectionSummary.n_spurious_escalations || 0;
+    el('tLatSub').textContent = `${n} episode${n === 1 ? '' : 's'}`
+      + (fp ? ` · ${fp} false positive${fp > 1 ? 's' : ''}` : '');
+  }
+
+  if (dev) {
+    const s = dev.session, m = dev.metrics;
+    el('lMech').textContent = s.kem_mechanism + (s.simulated_kem ? ' (simulated)' : '');
+    el('lKey').textContent = s.key_fingerprint;
+    el('lEpoch').textContent = s.epoch;
+    el('lHs').textContent = fmt.ms(s.last_handshake_ms);
+    el('lFrames').textContent = m.frames_sent;
+    el('lOver').textContent = m.frames_sent
+      ? `${(m.aead_overhead_bytes / m.frames_sent).toFixed(0)} B/frame`
+      : '—';
+    el('lHex').textContent = dev.last_frame?.ciphertext_preview
+      ? dev.last_frame.ciphertext_preview.replace(/(.{2})/g, '$1 ').trim() + ' …'
+      : 'no application frames yet — open /node on a phone';
+  }
+
+  const f = state.fleet;
+  if (f) {
+    el('fDevices').textContent = f.n_devices;
+    el('fEscalated').textContent = f.n_escalated;
+    el('fAlerts').textContent = f.n_fleet_alerts ?? f.fleet_alerts.length;
+    const latest = f.fleet_alerts[f.fleet_alerts.length - 1];
+    const b = el('fleetBanner');
+    if (latest && f.n_escalated >= f.min_devices_for_alert) {
+      b.className = 'banner crit';
+      b.innerHTML = `⚠ <b>COORDINATED CAMPAIGN</b> — ${latest.peak_device_count} devices,
+        type <b>${latest.dominant_attack_type}</b>, ${(latest.type_agreement * 100).toFixed(0)}% type agreement`;
+    } else if (f.n_escalated > 0) {
+      b.className = 'banner warn';
+      b.innerHTML = `${f.n_escalated} device(s) escalated, below the ${f.min_devices_for_alert}-device
+        concurrence bar — treated as independent activity, not a campaign.`;
+    } else {
+      b.className = 'banner info';
+      b.innerHTML = `Needs <b>${f.min_devices_for_alert}</b> devices escalating <em>and</em> agreeing on attack type before it calls a campaign.`;
+    }
+  }
+}
+
+function renderRekeys() {
+  const log = el('rekeyLog');
+  if (!rekeys.length) return;
+  log.innerHTML = rekeys.slice(-40).reverse().map((r) => `
+    <div class="entry">
+      <span class="t">${fmt.clock(r.ts)}</span>
+      <span class="${r.direction === 'escalate' ? 'up' : 'down'}">
+        ${r.direction === 'escalate' ? '▲' : '▼'} ${r.display_name || r.device_id} → ${r.profile}
+      </span>
+      <span class="muted tnum">${Number(r.total_ms).toFixed(2)} ms</span>
+    </div>`).join('');
+}
+
+/* The rekey log is derived from device state rather than accumulated from
+   the event stream, so a console opened halfway through a session shows the
+   whole history instead of an empty panel. */
+function median(xs) {
+  if (!xs.length) return 0;
+  const s = [...xs].sort((a, b) => a - b);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
+function rebuildRekeys() {
+  const all = [];
+  for (const d of state.devices) {
+    for (const h of d.handshakes || []) {
+      if (!h.reason || h.reason === 'session-open') continue;
+      all.push({
+        ts: h.wall_clock,
+        device_id: d.device_id,
+        display_name: d.display_name,
+        direction: h.reason,
+        profile: h.profile,
+        total_ms: h.total_ms,
+      });
+    }
+  }
+  all.sort((a, b) => a.ts - b.ts);
+  rekeys = all;
+}
+
+function renderAll() { renderDevices(); renderCharts(); renderTiles(); renderRekeys(); }
+
+/* ---------- websocket ---------- */
+const ws = connect('/ws/console', {
+  onOpen: () => banner.hide(),
+  onClose: () => banner.show(),
+  onMessage: (msg) => {
+    if (msg.type === 'hello') {
+      state.backend = msg.backend;
+      renderBackend(msg.backend);
+    }
+    if (msg.type === 'hello' || msg.type === 'snapshot') {
+      state.devices = msg.devices || [];
+      state.fleet = msg.fleet;
+      detections = msg.detections || detections;
+      detectionSummary = msg.detection_summary || detectionSummary;
+      // Drop focus on a device that has gone away, otherwise its last
+      // profile, key fingerprint and ciphertext stay frozen on screen while
+      // the charts beside them go blank.
+      if (focus && !state.devices.some((d) => d.device_id === focus)) focus = null;
+      rebuildRekeys();
+      if (msg.backend) { state.backend = msg.backend; renderBackend(msg.backend); }
+      if (!focus && state.devices.length) focus = state.devices[0].device_id;
+      renderAll();
+    }
+    if (msg.type === 'events') {
+      for (const ev of msg.events) {
+        if (ev.kind === 'rekey') {
+          // Snapshots own the log; events only drive the flash animation.
+          if (ev.data.device_id === focus) {
+            const tp = el('tProfile');
+            tp.classList.remove('rekey-flash');
+            void tp.offsetWidth;
+            tp.classList.add('rekey-flash');
+          }
+        }
+      }
+    }
+  },
+});
+setInterval(() => ws.send({ type: 'ping' }), 15000);
+
+window.addEventListener('resize', () => renderCharts());
+loadScenarios();
+</script>
+</body>
+</html>

@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Q-Safe Field Link — Join</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="__BASE__/static/shared.css">
+<script>window.QSAFE_BASE = "__BASE__";</script>
+<style>
+  body { padding: 24px 18px 40px; max-width: 1000px; margin: 0 auto; }
+  h1 { font-size: 26px; margin-bottom: 6px; }
+  .lede { color: var(--ink-2); font-size: 14px; line-height: 1.55; max-width: 62ch; margin-bottom: 22px; }
+  .joins { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
+  .join { text-align: center; }
+  .join .qr { background: #fff; border-radius: 10px; padding: 10px; margin: 10px auto; width: 172px; height: 172px; }
+  .join .qr img, .join .qr svg { width: 100%; height: 100%; display: block; }
+  .join h2 { font-size: 15px; margin-bottom: 4px; }
+  .join .who { font-size: 11.5px; color: var(--ink-3); min-height: 2.6em; line-height: 1.4; }
+  .join .url { font-family: var(--mono); font-size: 11.5px; color: var(--series-qber); word-break: break-all; margin-top: 8px; }
+  .note { margin-top: 22px; font-size: 12.5px; line-height: 1.6; color: var(--ink-2); }
+</style>
+</head>
+<body>
+  <h1>Q-Safe Field Link</h1>
+  <div class="lede">
+    A live demonstration of <b>Q-Safe IIoT-AD</b>: a crypto-agile, AI-gated
+    post-quantum security framework. Scan a code to bring a phone into the
+    demonstration as an industrial edge node or a control-room display.
+  </div>
+
+  <div class="joins" id="joins"></div>
+
+  <div class="note" id="note"></div>
+
+<script type="module">
+import { api, BASE } from '__BASE__/static/qsafe.js';
+
+const ROLES = [
+  { path: '/node', title: 'Field sensor', who: 'A phone. Becomes an industrial edge node and streams real telemetry across the protected link.' },
+  { path: '/monitor', title: 'Control room', who: 'A phone or smartwatch. Receives and decrypts that telemetry. Add ?compact=1 on a watch.' },
+  { path: '/console', title: 'Operator console', who: 'The projector. Shows the quantum channel, the detector, and every profile switch as it happens.' },
+];
+
+const urls = await api('/api/join-urls');
+document.getElementById('joins').innerHTML = ROLES.map((r) => `
+  <div class="card join">
+    <h2>${r.title}</h2>
+    <div class="who">${r.who}</div>
+    <div class="qr"><img src="${BASE}/api/qr?path=${encodeURIComponent(r.path)}" alt="QR code for ${r.title}"></div>
+    <div class="url">${urls.base}${r.path}</div>
+  </div>`).join('');
+
+const h = await api('/api/health');
+document.getElementById('note').innerHTML = `
+  Everyone must be on the same Wi-Fi (or the laptop's hotspot). No internet needed.<br>
+  KEM backend: <b>${h.using_real_liboqs ? 'real liboqs — BIKE-L1 / HQC-1' : 'SIMULATED (labelled throughout the UI)'}</b> ·
+  detector: <b>${h.detector_backend}</b>`;
+</script>
+</body>
+</html>
