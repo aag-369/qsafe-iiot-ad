@@ -1,0 +1,13 @@
+# Runtime dependencies of the DEPLOYED service (server.py: dashboard + demo).
+#
+# Kept separate from demo/requirements.txt on purpose. That file is for a
+# developer machine and pulls in matplotlib, which is only used by
+# demo/record_demo.py to render figures locally and adds tens of megabytes to
+# an image that has to fit a small instance.
+#
+# web/Dockerfile installs THIS file. If you add an import to secure_channel/
+# or qsafe_link/ that needs a new package, it belongs here -- the Dockerfile's
+# `python -c "import server"` check will fail the build if you forget.
+
+cryptography>=42.0   # HKDF-SHA256 + AES-256-GCM in secure_channel/
+qrcode>=7.4          # QR codes on the join page (page degrades to plain URLs)

@@ -20,12 +20,11 @@ WORKDIR /app
 
 COPY requirements.txt requirements.txt
 COPY web/requirements.txt web/requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt -r web/requirements.txt \
-    # The demo needs websockets (uvicorn[standard] already provides them) and
-    # qrcode for the join page. matplotlib is deliberately NOT installed: it is
-    # only used by demo/record_demo.py to render figures locally, and it would
-    # add tens of megabytes to an image that has to fit a small instance.
-    && pip install --no-cache-dir "qrcode>=7.4"
+COPY demo/requirements-runtime.txt demo/requirements-runtime.txt
+RUN pip install --no-cache-dir \
+      -r requirements.txt \
+      -r web/requirements.txt \
+      -r demo/requirements-runtime.txt
 
 COPY scripts/setup_liboqs.sh scripts/setup_liboqs.sh
 RUN bash scripts/setup_liboqs.sh
@@ -37,6 +36,12 @@ ENV TF_CPP_MIN_LOG_LEVEL=3
 # require the app to bind to it; default to 8000 for plain `docker run`.
 ENV PORT=8000
 EXPOSE 8000
+
+# Import the actual entrypoint. A missing runtime dependency is invisible to
+# the test suite (CI installs the full developer requirements) and only shows
+# up as the container exiting on boot -- this turns that into a build failure
+# with a readable traceback instead.
+RUN python -c "import server; print('server imports OK')"
 
 # Fail the build rather than shipping an image whose KEM cost ordering is
 # inverted: if the baseline profile is not cheaper than the hardened one, every

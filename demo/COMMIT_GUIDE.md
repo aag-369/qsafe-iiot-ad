@@ -64,13 +64,18 @@ left over from a permission check — it is ignored, and safe to delete.
 ## 2. Before you commit
 
 ```bash
-python -m pytest tests/ -q          # expect 121 passed
-python scripts/verify_kem_ordering.py
+python -m pytest tests/ -q               # expect 132 passed
+python scripts/verify_runtime_deps.py    # deployed image has every import
+python scripts/verify_kem_ordering.py    # baseline KEM cheaper than hardened
 ```
 
-Both should pass on your machine. If `verify_kem_ordering.py` reports the
-simulated backend rather than `LiboqsKEMBackend`, that is only because liboqs
-is not built locally — it will be built inside the Docker image.
+All three should pass. If `verify_kem_ordering.py` reports the simulated
+backend rather than `LiboqsKEMBackend`, that is only because liboqs is not
+built locally — it will be built inside the Docker image.
+
+`verify_runtime_deps.py` is the one that would have caught the deploy failure
+described in § 6: CI installs the full developer requirements, so it cannot
+notice a package the Docker image is missing.
 
 ---
 
@@ -160,3 +165,36 @@ Then check, in order:
 
 **Do not present from the deployed instance.** It is for sharing a link. The
 booth demo runs on your laptop — see `RUNBOOK.md` § 2.
+
+---
+
+## 6. Deploy failure this fixed (`cryptography` missing from the image)
+
+The first deploy of the merged service exited on boot:
+
+```
+File "/app/server.py", line 118, in <module>
+  from qsafe_link.gateway import create_app as create_link_app
+File "/app/qsafe_link/__init__.py", line 12, in <module>
+ModuleNotFoundError: No module named 'cryptography'
+```
+
+`secure_channel/session.py` uses `cryptography` for HKDF-SHA256 and
+AES-256-GCM. It was listed in `demo/requirements.txt` — but `web/Dockerfile`
+installed only `requirements.txt`, `web/requirements.txt`, and a hand-picked
+`qrcode`. Nothing else pulls `cryptography` in, so the import died at boot.
+
+CI could not have caught it: CI installs the full developer requirements,
+including `demo/requirements.txt`. The test suite was green while the image
+was unbuildable-in-practice. Three changes close that gap:
+
+| Change | Effect |
+|---|---|
+| `demo/requirements-runtime.txt` | The deployed service's own dependency list, installed by the Dockerfile. `demo/requirements.txt` now layers matplotlib and the dev extras on top. |
+| `RUN python -c "import server"` in the Dockerfile | A missing dependency fails the **build** with a readable traceback, instead of the container exiting minutes later. |
+| `scripts/verify_runtime_deps.py`, wired into CI | Statically walks the deployed entrypoint's import graph and compares it against what the image installs. Verified to fail on exactly this bug and pass once fixed. |
+
+`ai_edge_litert` also shows as absent from the image; that one is deliberate
+and harmless — `qsafe_link/detector.py` falls back to `tf.lite.Interpreter`,
+which ships with TensorFlow. The checker knows the difference between a hard
+dependency and one with a working fallback.

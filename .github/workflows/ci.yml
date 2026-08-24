@@ -32,6 +32,13 @@ jobs:
           pip install ruff
           ruff check . --exit-zero
 
+      - name: Verify the deployed image's dependencies
+        # CI installs the full developer requirements, so it cannot notice a
+        # package the Docker image is missing -- that only surfaces as the
+        # container exiting on boot. This compares the deployed entrypoint's
+        # import graph against the requirements web/Dockerfile installs.
+        run: python scripts/verify_runtime_deps.py
+
       - name: Verify KEM cost ordering
         # The adaptive-gating claim inverts if the baseline profile is not
         # cheaper than the hardened one, so this is a hard gate rather than a
